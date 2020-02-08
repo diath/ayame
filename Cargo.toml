@@ -1,0 +1,10 @@
+[package]
+name = "ayame"
+version = "0.1.0"
+authors = ["Kamil Chojnowski <Y29udGFjdEBkaWF0aC5uZXQ=>"]
+edition = "2018"
+
+[dependencies]
+tokio = { version = "0.2", features = ["full"] }
+futures = "0.3"
+ircmsgprs = "0.2.0"
