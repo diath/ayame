@@ -1,9 +1,9 @@
 mod client;
 mod server;
 
-use crate::server::Server;
+use server::Server;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    return Server::new().run().await;
+    return Server::new().accept().await;
 }

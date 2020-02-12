@@ -1,23 +1,37 @@
-use tokio::net::TcpListener;
-
 use crate::client::Client;
 
-pub struct Server;
+use std::sync::Arc;
+
+use tokio::net::TcpListener;
+use tokio::sync::Mutex;
+
+pub struct Server {
+    pub name: String,
+    clients: Mutex<Vec<Arc<Client>>>,
+}
 
 impl Server {
     pub fn new() -> Server {
-        Server {}
+        Server {
+            name: "Test".to_string(),
+            clients: Mutex::new(vec![]),
+        }
     }
 
-    pub async fn run(&mut self) -> Result<(), Box<dyn std::error::Error>> {
-        let mut listener = TcpListener::bind("127.0.0.1:6667").await?;
+    pub async fn accept(self) -> Result<(), Box<dyn std::error::Error>> {
+        let server = Arc::new(self);
+        let mut acceptor = TcpListener::bind("127.0.0.1:6667").await?;
         loop {
-            let (stream, address) = listener.accept().await?;
-            println!("Client connected ({}).", address);
-            let mut client = Client::new(address);
+            let (stream, addr) = acceptor.accept().await?;
+            let client = Arc::new(Client::new(server.clone(), addr));
+
+            println!("Client connected ({}).", addr);
+            let c = Mutex::new(client.clone());
             tokio::spawn(async move {
-                client.task(stream).await;
+                c.lock().await.task(stream).await;
             });
+
+            server.clients.lock().await.push(client.clone());
         }
     }
 }

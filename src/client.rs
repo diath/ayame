@@ -1,53 +1,50 @@
+use crate::server::Server;
+
 use std::net::SocketAddr;
+use std::sync::Arc;
 
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::net::TcpStream;
+use tokio::sync::Mutex;
 
 use ircmsgprs::parser::{Message, Parser};
 
 pub struct Client {
+    pub name: Mutex<String>,
+    server: Arc<Server>,
     address: SocketAddr,
-    parser: Parser,
+    parser: Mutex<Parser>,
 }
 
 impl Client {
-    pub fn new(address: SocketAddr) -> Client {
+    pub fn new(server: Arc<Server>, address: SocketAddr) -> Client {
         Client {
+            name: Mutex::new(String::new()),
+            server: server,
             address: address,
-            parser: Parser::new(),
+            parser: Mutex::new(Parser::new()),
         }
     }
 
-    pub async fn task(&mut self, mut stream: TcpStream) {
+    pub async fn task(&self, mut stream: TcpStream) {
         let (reader, _writer) = stream.split();
+        let mut line = String::new();
         let mut buf_reader = BufReader::new(reader);
-        let mut buffer = vec![];
 
         loop {
-            // TODO(diath): Should it read until \r\n?
-            match buf_reader.read_until(b'\n', &mut buffer).await {
-                Ok(size) => {
-                    if size == 0 {
-                        break;
-                    } else {
-                        let line = String::from_utf8(buffer.clone());
-                        if line.is_ok() {
-                            let result = self.parser.parse(line.unwrap());
-                            if result.is_none() {
-                                println!("Client parse error.");
-                                return;
-                            }
-                            self.on_message(result.unwrap());
-                        }
-                    }
-
-                    buffer.clear();
-                }
-                Err(error) => {
-                    eprintln!("Client error: {}.", error);
+            let size = buf_reader.read_line(&mut line).await.unwrap();
+            if size == 0 {
+                break;
+            } else {
+                let result = self.parser.lock().await.parse(line.clone());
+                if result.is_none() {
+                    println!("Client parse error.");
                     break;
                 }
+                self.on_message(result.unwrap());
             }
+
+            line.clear();
         }
 
         println!("Client disconnected ({}).", self.address);
