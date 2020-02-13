@@ -2,19 +2,22 @@ use crate::client::Client;
 
 use std::sync::Arc;
 
+use std::collections::HashMap;
+use std::vec::Vec;
+
 use tokio::net::TcpListener;
 use tokio::sync::Mutex;
 
 pub struct Server {
-    pub name: String,
-    clients: Mutex<Vec<Arc<Client>>>,
+    clients: Mutex<HashMap<String, Arc<Client>>>,
+    clients_pending: Mutex<Vec<Arc<Client>>>,
 }
 
 impl Server {
     pub fn new() -> Server {
         Server {
-            name: "Test".to_string(),
-            clients: Mutex::new(vec![]),
+            clients: Mutex::new(HashMap::new()),
+            clients_pending: Mutex::new(vec![]),
         }
     }
 
@@ -31,7 +34,35 @@ impl Server {
                 c.lock().await.task(stream).await;
             });
 
-            server.clients.lock().await.push(client.clone());
+            server.clients_pending.lock().await.push(client.clone());
+        }
+    }
+
+    pub async fn is_nick_mapped(&self, name: &str) -> bool {
+        self.clients.lock().await.contains_key(name)
+    }
+
+    pub async fn map_nick(&self, name: String, client: &Client) {
+        let index = self
+            .clients_pending
+            .lock()
+            .await
+            .iter()
+            .position(|c| Arc::into_raw(c.clone()) == &*client);
+        if index.is_none() {
+            panic!("map nick");
+        }
+        let c = self.clients_pending.lock().await.remove(index.unwrap());
+        self.clients.lock().await.insert(name, c);
+    }
+
+    pub async fn remap_nick(&self, old_name: String, name: String) {
+        if !self.clients.lock().await.contains_key(&old_name) {
+            panic!("remap_nick()");
+        }
+
+        if let Some(client) = self.clients.lock().await.remove(&old_name) {
+            self.clients.lock().await.insert(name, client);
         }
     }
 }
