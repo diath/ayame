@@ -75,4 +75,16 @@ impl Server {
             false
         }
     }
+
+    pub async fn forward_message(&self, sender: String, name: &str, message: String) {
+        if !self.clients.lock().await.contains_key(name) {
+            panic!("forward_message()");
+        }
+
+        if let Some(client) = self.clients.lock().await.get(name) {
+            client
+                .send_raw(format!(":{} PRIVMSG {} :{}\r\n", sender, name, message))
+                .await;
+        }
+    }
 }
