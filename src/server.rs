@@ -11,6 +11,7 @@ use tokio::sync::Mutex;
 pub struct Server {
     clients: Mutex<HashMap<String, Arc<Client>>>,
     clients_pending: Mutex<Vec<Arc<Client>>>,
+    operators: Mutex<HashMap<String, String>>,
 }
 
 impl Server {
@@ -18,6 +19,7 @@ impl Server {
         Server {
             clients: Mutex::new(HashMap::new()),
             clients_pending: Mutex::new(vec![]),
+            operators: Mutex::new(HashMap::new()),
         }
     }
 
@@ -63,6 +65,14 @@ impl Server {
 
         if let Some(client) = self.clients.lock().await.remove(&old_name) {
             self.clients.lock().await.insert(name, client);
+        }
+    }
+
+    pub async fn is_operator(&self, name: String, password: String) -> bool {
+        if let Some(entry) = self.operators.lock().await.get(name.as_str()) {
+            entry == &password
+        } else {
+            false
         }
     }
 }
