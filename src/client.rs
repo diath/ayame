@@ -14,6 +14,7 @@ pub struct Client {
     pub nick: Mutex<String>,
     pub user: Mutex<String>,
     pub real_name: Mutex<String>,
+    pub password: Mutex<String>,
     pub registered: Mutex<bool>,
     pub operator: Mutex<bool>,
     server: Arc<Server>,
@@ -27,6 +28,7 @@ impl Client {
             nick: Mutex::new(String::new()),
             user: Mutex::new(String::new()),
             real_name: Mutex::new(String::new()),
+            password: Mutex::new(String::new()),
             registered: Mutex::new(false),
             operator: Mutex::new(false),
             server: server,
@@ -78,6 +80,9 @@ impl Client {
             "CAP" => {
                 self.on_cap(message);
             }
+            "PASS" => {
+                self.on_pass(message).await;
+            }
             "NICK" => {
                 self.on_nick(message).await;
             }
@@ -104,6 +109,24 @@ impl Client {
 
     fn on_cap(&self, _message: Message) {
         println!("Ignoring CAP command (IRCv3)");
+    }
+
+    async fn on_pass(&self, message: Message) {
+        if message.params.len() < 1 {
+            self.send_numeric_reply(
+                NumericReply::ErrNeedMoreParams,
+                "PASS :Not enough parameters".to_string(),
+            )
+            .await;
+        } else if (*self.nick.lock().await).len() > 0 || *self.registered.lock().await {
+            self.send_numeric_reply(
+                NumericReply::ErrAlreadyRegistered,
+                ":Unauthorized command (already registered)".to_string(),
+            )
+            .await;
+        } else {
+            (*self.password.lock().await) = message.params[0].clone();
+        }
     }
 
     async fn on_nick(&self, message: Message) {
