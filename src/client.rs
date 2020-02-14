@@ -4,7 +4,7 @@ use crate::server::Server;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
-use tokio::io::{AsyncBufReadExt, BufReader};
+use tokio::io::{split, AsyncBufReadExt, AsyncWriteExt, BufReader, WriteHalf};
 use tokio::net::TcpStream;
 use tokio::sync::Mutex;
 
@@ -19,6 +19,7 @@ pub struct Client {
     pub operator: Mutex<bool>,
     server: Arc<Server>,
     address: SocketAddr,
+    writer: Mutex<Option<WriteHalf<TcpStream>>>,
     parser: Mutex<Parser>,
 }
 
@@ -33,6 +34,7 @@ impl Client {
             operator: Mutex::new(false),
             server: server,
             address: address,
+            writer: Mutex::new(None),
             parser: Mutex::new(Parser::new()),
         }
     }
@@ -46,10 +48,12 @@ impl Client {
         );
     }
 
-    pub async fn task(&self, mut stream: TcpStream) {
-        let (reader, _writer) = stream.split();
+    pub async fn task(&self, stream: TcpStream) {
+        let (reader, writer) = split(stream);
         let mut line = String::new();
         let mut buf_reader = BufReader::new(reader);
+
+        (*self.writer.lock().await) = Some(writer);
 
         loop {
             let size = buf_reader.read_line(&mut line).await.unwrap();
@@ -70,9 +74,22 @@ impl Client {
         println!("Client disconnected ({}).", self.address);
     }
 
-    pub async fn send_raw(&self, _message: String) {}
+    pub async fn send_raw(&self, message: String) {
+        if let Some(writer) = &mut *self.writer.lock().await {
+            match writer.write_all(message.as_bytes()).await {
+                Ok(_) => {}
+                Err(_) => {
+                    println!("Failed to write message ({})", message);
+                }
+            }
+        }
+    }
 
-    pub async fn send_numeric_reply(&self, _reply: NumericReply, _message: String) {}
+    pub async fn send_numeric_reply(&self, reply: NumericReply, message: String) {
+        let nick = self.nick.lock().await;
+        self.send_raw(format!(":ayame {} {} {}", reply as i32, nick, message))
+            .await;
+    }
 
     async fn on_message(&self, message: Message) {
         println!("Received message: {}", message);
