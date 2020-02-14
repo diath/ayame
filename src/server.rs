@@ -117,7 +117,7 @@ impl Server {
 
         if let Some(client) = self.clients.lock().await.get(name) {
             client
-                .send_raw(format!(":{} PRIVMSG {} :{}\r\n", sender, name, message))
+                .send_raw(format!(":{} PRIVMSG {} :{}", sender, name, message))
                 .await;
         }
     }
@@ -164,7 +164,7 @@ impl Server {
 
     pub async fn forward_channel_message(&self, sender: String, name: &str, message: String) {
         /* TODO(diath): This should broadcast user prefix and not nick. */
-        let message = format!(":{} PRIVMSG {} :{}\r\n", sender, name, message);
+        let message = format!(":{} PRIVMSG {} :{}", sender, name, message);
         if let Some(channel) = self.channels.lock().await.get(name) {
             println!("[{}] {}: {}", name, sender, message);
 

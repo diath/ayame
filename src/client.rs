@@ -83,7 +83,10 @@ impl Client {
 
     pub async fn send_raw(&self, message: String) {
         if let Some(writer) = &mut *self.writer.lock().await {
-            match writer.write_all(message.as_bytes()).await {
+            match writer
+                .write_all(format!("{}\r\n", message).as_bytes())
+                .await
+            {
                 Ok(_) => {}
                 Err(_) => {
                     println!("Failed to write message ({})", message);
