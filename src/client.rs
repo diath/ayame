@@ -177,7 +177,7 @@ impl Client {
         } else {
             let name = message.params[0].clone();
             let password = message.params[1].clone();
-            if self.server.is_operator(name, password).await {
+            if self.server.is_operator(&name, &password).await {
                 (*self.operator.lock().await) = true;
                 self.send_numeric_reply(
                     NumericReply::RplYoureOper,

@@ -77,9 +77,9 @@ impl Server {
         }
     }
 
-    pub async fn is_operator(&self, name: String, password: String) -> bool {
-        if let Some(entry) = self.operators.lock().await.get(name.as_str()) {
-            entry == &password
+    pub async fn is_operator(&self, name: &str, password: &str) -> bool {
+        if let Some(entry) = self.operators.lock().await.get(name) {
+            entry == password
         } else {
             false
         }
