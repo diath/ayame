@@ -94,8 +94,41 @@ impl Client {
 
     pub async fn send_numeric_reply(&self, reply: NumericReply, message: String) {
         let nick = self.nick.lock().await;
-        self.send_raw(format!(":ayame {} {} {}", reply as i32, nick, message))
-            .await;
+        self.send_raw(format!(
+            ":{} {:03} {} {}",
+            self.server.name, reply as i32, nick, message
+        ))
+        .await;
+    }
+
+    pub async fn complete_registration(&self) {
+        (*self.registered.lock().await) = true;
+
+        let prefix = self.get_prefix().await;
+        self.send_numeric_reply(
+            NumericReply::RplWelcome,
+            format!("Welcome to {} {}", self.server.name, prefix),
+        )
+        .await;
+
+        /* TODO(diath): We should probably store software version somewhere. */
+        self.send_numeric_reply(
+            NumericReply::RplYourHost,
+            format!(
+                "Your host is {} running version {}",
+                self.server.name, "ayame 0.1.0"
+            ),
+        )
+        .await;
+
+        /* TODO(diath): We should probably store first startup time somewhere. */
+        self.send_numeric_reply(
+            NumericReply::RplCreated,
+            format!("This server was created {}", self.server.created),
+        )
+        .await;
+
+        /* TODO(diath): Send RPL_MYINFO with <servername> <version> <user modes> <server modes>. */
     }
 
     async fn on_message(&self, message: Message) {
@@ -174,7 +207,7 @@ impl Client {
                         self.server.map_nick(nick.to_string(), &self).await;
 
                         if !*self.registered.lock().await && self.user.lock().await.len() != 0 {
-                            (*self.registered.lock().await) = true;
+                            self.complete_registration().await;
                         }
                     } else {
                         self.server
@@ -211,7 +244,7 @@ impl Client {
             (*self.real_name.lock().await) = message.params[3].clone();
 
             if self.nick.lock().await.len() != 0 {
-                (*self.registered.lock().await) = true;
+                self.complete_registration().await;
             }
         }
     }

@@ -1,15 +1,20 @@
 use crate::channel::Channel;
 use crate::client::Client;
 
-use std::sync::Arc;
-
 use std::collections::HashMap;
+use std::sync::Arc;
+use std::time::SystemTime;
 use std::vec::Vec;
+
+use chrono::prelude::DateTime;
+use chrono::Utc;
 
 use tokio::net::TcpListener;
 use tokio::sync::Mutex;
 
 pub struct Server {
+    pub name: String,
+    pub created: String,
     clients: Mutex<HashMap<String, Arc<Client>>>,
     clients_pending: Mutex<Vec<Arc<Client>>>,
     operators: Mutex<HashMap<String, String>>,
@@ -17,8 +22,12 @@ pub struct Server {
 }
 
 impl Server {
-    pub fn new() -> Server {
+    pub fn new(name: String) -> Server {
+        let dt = DateTime::<Utc>::from(SystemTime::now());
+
         Server {
+            name: name,
+            created: dt.format("%Y-%m-%d %H:%M:%S.%f").to_string(),
             clients: Mutex::new(HashMap::new()),
             clients_pending: Mutex::new(vec![]),
             operators: Mutex::new(HashMap::new()),
