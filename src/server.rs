@@ -53,7 +53,7 @@ impl Server {
         self.clients.lock().await.contains_key(name)
     }
 
-    pub async fn map_nick(&self, name: String, client: &Client) {
+    pub async fn map_nick(&self, nick: String, client: &Client) {
         let index = self
             .clients_pending
             .lock()
@@ -64,16 +64,32 @@ impl Server {
             panic!("map nick");
         }
         let c = self.clients_pending.lock().await.remove(index.unwrap());
-        self.clients.lock().await.insert(name, c);
+        self.clients.lock().await.insert(nick, c);
     }
 
-    pub async fn remap_nick(&self, old_name: String, name: String) {
-        if !self.clients.lock().await.contains_key(&old_name) {
+    pub async fn remap_nick(&self, old_nick: String, nick: String) {
+        if !self.clients.lock().await.contains_key(&old_nick) {
             panic!("remap_nick()");
         }
 
-        if let Some(client) = self.clients.lock().await.remove(&old_name) {
-            self.clients.lock().await.insert(name, client);
+        if let Some(client) = self.clients.lock().await.remove(&old_nick) {
+            self.clients.lock().await.insert(nick, client);
+        }
+    }
+
+    pub async fn unmap_nick(&self, nick: String) {
+        self.clients.lock().await.remove(&nick);
+    }
+
+    pub async fn unmap_client(&self, client: &Client) {
+        let index = self
+            .clients_pending
+            .lock()
+            .await
+            .iter()
+            .position(|c| Arc::into_raw(c.clone()) == &*client);
+        if index.is_some() {
+            self.clients_pending.lock().await.remove(index.unwrap());
         }
     }
 

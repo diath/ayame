@@ -71,6 +71,13 @@ impl Client {
             line.clear();
         }
 
+        let nick = self.nick.lock().await;
+        if nick.len() != 0 {
+            self.server.unmap_nick(nick.to_string()).await;
+        }
+
+        self.server.unmap_client(&self).await;
+
         println!("Client disconnected ({}).", self.address);
     }
 
