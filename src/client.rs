@@ -172,6 +172,10 @@ impl Client {
                 } else {
                     if self.nick.lock().await.len() == 0 {
                         self.server.map_nick(nick.to_string(), &self).await;
+
+                        if !*self.registered.lock().await && self.user.lock().await.len() != 0 {
+                            (*self.registered.lock().await) = true;
+                        }
                     } else {
                         self.server
                             .remap_nick(self.nick.lock().await.to_string(), nick.to_string())
@@ -205,7 +209,10 @@ impl Client {
         } else {
             (*self.user.lock().await) = message.params[0].clone();
             (*self.real_name.lock().await) = message.params[3].clone();
-            (*self.registered.lock().await) = true;
+
+            if self.nick.lock().await.len() != 0 {
+                (*self.registered.lock().await) = true;
+            }
         }
     }
 
