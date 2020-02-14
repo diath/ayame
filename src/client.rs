@@ -90,6 +90,12 @@ impl Client {
             "PRIVMSG" => {
                 self.on_privmsg(message).await;
             }
+            "JOIN" => {
+                self.on_join(message).await;
+            }
+            "PART" => {
+                self.on_part(message).await;
+            }
             _ => {
                 println!("Command {} not implemented.", message.command);
             }
@@ -217,7 +223,31 @@ impl Client {
 
                 match &target[0..1] {
                     "#" => {
-                        println!("Channel support not implemented.");
+                        if self.server.is_channel_mapped(target).await {
+                            let nick = self.nick.lock().await.to_string();
+                            if self.server.has_channel_participant(target, &nick).await {
+                                self.server
+                                    .forward_channel_message(
+                                        self.get_prefix().await,
+                                        target,
+                                        text.clone(),
+                                    )
+                                    .await;
+                            } else {
+                                /* TODO(diath): Check for channel +n mode (if user not on a channel) or channel +m mode (if user not +v) */
+                                self.send_numeric_reply(
+                                    NumericReply::ErrCannotSendToChan,
+                                    format!("{} :Cannot send to channel", target).to_string(),
+                                )
+                                .await;
+                            }
+                        } else {
+                            self.send_numeric_reply(
+                                NumericReply::ErrNoSuchChannel,
+                                format!("{} :No such channel", target).to_string(),
+                            )
+                            .await;
+                        }
                     }
                     //* NOTE(diath): Technically a channel can be prefixed with either # (network), ! (safe), + (unmoderated) or & (local) but we only support #. */
                     "!" | "&" | "+" => {
@@ -241,6 +271,76 @@ impl Client {
                         }
                     }
                 }
+            }
+        }
+    }
+
+    async fn on_join(&self, message: Message) {
+        /* TODO(diath): ERR_INVITEONLYCHAN, ERR_CHANNELISFULL, ERR_TOOMANYTARGETS, ERR_BANNEDFROMCHAN, ERR_BADCHANNELKEY, ERR_BADCHANMASK, ERR_TOOMANYCHANNELS, ERR_UNAVAILRESOURCE */
+        /* TODO(diath): Channel keys */
+        if !*self.registered.lock().await {
+            return;
+        }
+
+        let nick = self.nick.lock().await.to_string();
+        let targets = message.params[0].split(",");
+        for target in targets {
+            if target.len() == 0 {
+                continue;
+            }
+
+            if !self.server.is_channel_mapped(target).await {
+                continue;
+            }
+
+            self.server.join_channel(target, &nick).await;
+        }
+    }
+
+    async fn on_part(&self, message: Message) {
+        if !*self.registered.lock().await {
+            return;
+        }
+
+        if message.params.len() < 1 {
+            self.send_numeric_reply(
+                NumericReply::ErrNeedMoreParams,
+                "PART :Not enough parameters".to_string(),
+            )
+            .await;
+        } else {
+            let nick = self.nick.lock().await.to_string();
+            let targets = message.params[0].split(",");
+            let part_message = if message.params.len() > 1 {
+                message.params[1].clone()
+            } else {
+                "Leaving".to_string()
+            };
+
+            for target in targets {
+                if target.len() == 0 {
+                    continue;
+                }
+
+                if !self.server.is_channel_mapped(target).await {
+                    self.send_numeric_reply(
+                        NumericReply::ErrNoSuchChannel,
+                        format!("{} :No such channel", target).to_string(),
+                    )
+                    .await;
+                    continue;
+                }
+
+                if !self.server.has_channel_participant(target, &nick).await {
+                    self.send_numeric_reply(
+                        NumericReply::ErrNotOnChannel,
+                        format!("{} :You're not on that channel", target).to_string(),
+                    )
+                    .await;
+                    continue;
+                }
+
+                self.server.part_channel(target, &nick, &part_message).await;
             }
         }
     }

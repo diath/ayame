@@ -1,3 +1,4 @@
+use crate::channel::Channel;
 use crate::client::Client;
 
 use std::sync::Arc;
@@ -12,6 +13,7 @@ pub struct Server {
     clients: Mutex<HashMap<String, Arc<Client>>>,
     clients_pending: Mutex<Vec<Arc<Client>>>,
     operators: Mutex<HashMap<String, String>>,
+    channels: Mutex<HashMap<String, Channel>>,
 }
 
 impl Server {
@@ -20,11 +22,18 @@ impl Server {
             clients: Mutex::new(HashMap::new()),
             clients_pending: Mutex::new(vec![]),
             operators: Mutex::new(HashMap::new()),
+            channels: Mutex::new(HashMap::new()),
         }
     }
 
     pub async fn accept(self) -> Result<(), Box<dyn std::error::Error>> {
         let server = Arc::new(self);
+        server
+            .channels
+            .lock()
+            .await
+            .insert("#lobby".to_string(), Channel::new("#lobby".to_string()));
+
         let mut acceptor = TcpListener::bind("127.0.0.1:6667").await?;
         loop {
             let (stream, addr) = acceptor.accept().await?;
@@ -85,6 +94,60 @@ impl Server {
             client
                 .send_raw(format!(":{} PRIVMSG {} :{}\r\n", sender, name, message))
                 .await;
+        }
+    }
+
+    pub async fn is_channel_mapped(&self, name: &str) -> bool {
+        self.channels.lock().await.contains_key(name)
+    }
+
+    pub async fn has_channel_participant(&self, name: &str, nick: &str) -> bool {
+        if let Some(channel) = self.channels.lock().await.get(name) {
+            return channel.has_participant(nick.to_string()).await;
+        }
+
+        false
+    }
+
+    pub async fn join_channel(&self, name: &str, nick: &str) {
+        /* TODO(diath): This should broadcast user prefix and not nick. */
+        let message = format!(":{} JOIN {}", nick, name);
+        if let Some(channel) = self.channels.lock().await.get(name) {
+            if channel.join(nick.to_string()).await {
+                for target in &*channel.participants.lock().await {
+                    if let Some(client) = self.clients.lock().await.get(target) {
+                        client.send_raw(message.clone()).await;
+                    }
+                }
+            }
+        }
+    }
+
+    pub async fn part_channel(&self, name: &str, nick: &str, part_message: &str) {
+        /* TODO(diath): This should broadcast user prefix and not nick. */
+        let message = format!(":{} PART :{}.", nick, part_message);
+        if let Some(channel) = self.channels.lock().await.get(name) {
+            if channel.part(nick.to_string()).await {
+                for target in &*channel.participants.lock().await {
+                    if let Some(client) = self.clients.lock().await.get(target) {
+                        client.send_raw(message.clone()).await;
+                    }
+                }
+            }
+        }
+    }
+
+    pub async fn forward_channel_message(&self, sender: String, name: &str, message: String) {
+        /* TODO(diath): This should broadcast user prefix and not nick. */
+        let message = format!(":{} PRIVMSG {} :{}\r\n", sender, name, message);
+        if let Some(channel) = self.channels.lock().await.get(name) {
+            println!("[{}] {}: {}", name, sender, message);
+
+            for target in &*channel.participants.lock().await {
+                if let Some(client) = self.clients.lock().await.get(target) {
+                    client.send_raw(message.clone()).await;
+                }
+            }
         }
     }
 }
