@@ -5,6 +5,10 @@ use std::collections::HashSet;
 use std::io::ErrorKind;
 use std::net::SocketAddr;
 use std::sync::Arc;
+use std::time::SystemTime;
+
+use chrono::prelude::DateTime;
+use chrono::Utc;
 
 use tokio::io::{split, AsyncBufReadExt, AsyncWriteExt, BufReader, WriteHalf};
 use tokio::net::TcpStream;
@@ -180,6 +184,9 @@ impl Client {
             }
             "MOTD" => {
                 self.on_motd(message).await;
+            }
+            "TIME" => {
+                self.on_time(message).await;
             }
             _ => {
                 if *self.registered.lock().await {
@@ -542,22 +549,30 @@ impl Client {
         }
     }
 
-    async fn on_motd(&self, message: Message) {
+    async fn on_motd(&self, _message: Message) {
         if !*self.registered.lock().await {
             return;
         }
 
-        /* TODO(anyone-interested): add support for <target> */
-        if message.params.len() > 0 && message.params[0] != self.server.name {
-            self.send_numeric_reply(
-                NumericReply::ErrNoSuchServer,
-                format!("{} :No such server", message.params[0]).to_string(),
-            )
-            .await;
+        /* TODO: add support for <target> */
+        self.server.send_motd(&self).await;
+    }
 
+    async fn on_time(&self, _message: Message) {
+        if !*self.registered.lock().await {
             return;
         }
 
-        self.server.send_motd(&self).await;
+        /* TODO: add support for <target> */
+        self.send_numeric_reply(
+            NumericReply::RplTime,
+            format!(
+                "{} :{}",
+                self.server.name,
+                DateTime::<Utc>::from(SystemTime::now()).format("%Y-%m-%d %H:%M:%S")
+            )
+            .to_string(),
+        )
+        .await;
     }
 }
