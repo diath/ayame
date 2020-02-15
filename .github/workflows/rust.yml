@@ -1,6 +1,6 @@
-name: Rust
+name: Main
 
-on: [push]
+on: push
 
 jobs:
   codestyle:
@@ -22,14 +22,15 @@ jobs:
         with:
           components: clippy
           rust-version: stable
-        - uses: actions/checkout@v1
-        - run: cargo clippy --all-targets --all-features -- -D clippy::all
+      - uses: actions/checkout@v1
+      - run: cargo clippy --all-targets --all-features -- -D clippy::all
 
   compile:
     runs-on: ubuntu-latest
     steps:
       - name: Set up Rust
         uses: hecrj/setup-rust-action@v1
-        rust-version: stable
+        with:
+          rust-version: stable
       - uses: actions/checkout@master
-      - run: cargo build
+      - run: cargo check --all
