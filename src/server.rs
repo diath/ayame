@@ -2,7 +2,7 @@ use crate::channel::{Channel, ChannelTopic};
 use crate::client::Client;
 use crate::replies::NumericReply;
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::sync::Arc;
@@ -330,13 +330,19 @@ impl Server {
 
     pub async fn broadcast_quit(&self, client: &Client, reason: &str) {
         let message = format!(":{} QUIT :{}", client.get_prefix().await, reason);
+        let mut targets = HashSet::new();
+
         for channel_name in &*client.channels.lock().await {
             if let Some(channel) = self.channels.lock().await.get(channel_name) {
                 for target in &*channel.participants.lock().await {
-                    if let Some(client) = self.clients.lock().await.get(target) {
-                        client.send_raw(message.clone()).await;
-                    }
+                    targets.insert(target.clone());
                 }
+            }
+        }
+
+        for target in targets {
+            if let Some(client) = self.clients.lock().await.get(&target) {
+                client.send_raw(message.clone()).await;
             }
         }
     }
