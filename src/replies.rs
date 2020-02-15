@@ -11,6 +11,7 @@ pub enum NumericReply {
     ErrCannotSendToChan = 404,
     ErrNoRecipient = 411,
     ErrNoTextToSend = 412,
+    ErrUnknownCommand = 421,
     ErrNoNicknameGiven = 431,
     ErrErroneousNickname = 432,
     ErrNicknameInUse = 433,

@@ -178,6 +178,13 @@ impl Client {
                 self.on_topic(message).await;
             }
             _ => {
+                if *self.registered.lock().await {
+                    self.send_numeric_reply(
+                        NumericReply::ErrUnknownCommand,
+                        format!("{} :Unknown command", message.command),
+                    )
+                    .await;
+                }
                 println!("Command {} not implemented.", message.command);
             }
         }
