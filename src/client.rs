@@ -2,6 +2,7 @@ use crate::replies::NumericReply;
 use crate::server::Server;
 
 use std::collections::HashSet;
+use std::io::ErrorKind;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
@@ -59,16 +60,25 @@ impl Client {
         (*self.writer.lock().await) = Some(writer);
 
         loop {
-            let size = buf_reader.read_line(&mut line).await.unwrap();
-            if size == 0 {
-                break;
-            } else {
-                let result = self.parser.lock().await.parse(line.clone());
-                if result.is_none() {
-                    println!("Client parse error.");
-                    break;
+            match buf_reader.read_line(&mut line).await {
+                Ok(size) => {
+                    if size == 0 {
+                        break;
+                    } else {
+                        let result = self.parser.lock().await.parse(line.clone());
+                        if result.is_none() {
+                            println!("Client parse error.");
+                            break;
+                        }
+                        self.on_message(result.unwrap()).await;
+                    }
                 }
-                self.on_message(result.unwrap()).await;
+                Err(err) => {
+                    if err.kind() != ErrorKind::InvalidData {
+                        eprintln!("Client read error ({}).", err);
+                        break;
+                    }
+                }
             }
 
             line.clear();
