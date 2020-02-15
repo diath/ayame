@@ -1,13 +1,15 @@
-name: Rust
+name: Main
 
-on: [push]
+on: [push, pull_request]
 
 jobs:
-  build:
-
+  rust:
     runs-on: ubuntu-latest
-
     steps:
-    - uses: actions/checkout@v2
-    - name: Build
-      run: cargo build --verbose
+      - name: Set up Rust
+        uses: hecrj/setup-rust-action@v1
+        with:
+          components: rustfmt
+          rust-version: stable
+      - uses: actions/checkout@v1
+      - run: cargo fmt --all -- --check && cargo check --all
