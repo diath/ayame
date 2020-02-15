@@ -67,6 +67,7 @@ impl Client {
             match buf_reader.read_line(&mut line).await {
                 Ok(size) => {
                     if size == 0 {
+                        self.server.broadcast_quit(&self, "EOF").await;
                         break;
                     } else {
                         let result = self.parser.lock().await.parse(line.clone());
@@ -79,6 +80,7 @@ impl Client {
                 }
                 Err(err) => {
                     if err.kind() != ErrorKind::InvalidData {
+                        self.server.broadcast_quit(&self, "Read Error").await;
                         eprintln!("Client read error ({}).", err);
                         break;
                     }
@@ -169,6 +171,9 @@ impl Client {
             }
             "OPER" => {
                 self.on_oper(message).await;
+            }
+            "QUIT" => {
+                self.on_quit(message).await;
             }
             "PRIVMSG" => {
                 self.on_privmsg(message).await;
@@ -574,5 +579,21 @@ impl Client {
             .to_string(),
         )
         .await;
+    }
+
+    async fn on_quit(&self, message: Message) {
+        let reason = if message.params.len() > 0 {
+            message.params[0].to_string()
+        } else {
+            "Quitting".to_string()
+        };
+
+        self.server.broadcast_quit(&self, &reason).await;
+
+        /* TODO(diath): We should probably also shutdown the reader somehow. */
+        if let Some(mut writer) = self.writer.lock().await.take() {
+            writer.flush();
+            writer.shutdown();
+        }
     }
 }
