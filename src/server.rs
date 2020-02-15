@@ -302,31 +302,29 @@ impl Server {
 
     pub async fn send_motd(&self, client: &Client) {
         if let Some(motd) = &self.motd {
-            client.send_numeric_reply(
-                NumericReply::RplMotdStart,
-                format!(":- {} Message of the day - ", self.name).to_string()
-            )
-            .await;
-
-            for line in motd {
-                client.send_numeric_reply(
-                    NumericReply::RplMotd,
-                    format!(":- {}", line).to_string()
+            client
+                .send_numeric_reply(
+                    NumericReply::RplMotdStart,
+                    format!(":- {} Message of the day - ", self.name).to_string(),
                 )
                 .await;
+
+            for line in motd {
+                client
+                    .send_numeric_reply(NumericReply::RplMotd, format!(":- {}", line).to_string())
+                    .await;
             }
 
-            client.send_numeric_reply(
-                NumericReply::RplEndOfMotd,
-                ":End of MOTD command".to_string()
-            )
-            .await;
+            client
+                .send_numeric_reply(
+                    NumericReply::RplEndOfMotd,
+                    ":End of MOTD command".to_string(),
+                )
+                .await;
         } else {
-            client.send_numeric_reply(
-                NumericReply::ErrNoMotd,
-                ":MOTD File is missing".to_string()
-            )
-            .await;
+            client
+                .send_numeric_reply(NumericReply::ErrNoMotd, ":MOTD File is missing".to_string())
+                .await;
         }
     }
 }
