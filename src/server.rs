@@ -327,4 +327,17 @@ impl Server {
                 .await;
         }
     }
+
+    pub async fn broadcast_quit(&self, client: &Client, reason: &str) {
+        let message = format!(":{} QUIT :{}", client.get_prefix().await, reason);
+        for channel_name in &*client.channels.lock().await {
+            if let Some(channel) = self.channels.lock().await.get(channel_name) {
+                for target in &*channel.participants.lock().await {
+                    if let Some(client) = self.clients.lock().await.get(target) {
+                        client.send_raw(message.clone()).await;
+                    }
+                }
+            }
+        }
+    }
 }
