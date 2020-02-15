@@ -164,6 +164,9 @@ impl Client {
             "PART" => {
                 self.on_part(message).await;
             }
+            "TOPIC" => {
+                self.on_topic(message).await;
+            }
             _ => {
                 println!("Command {} not implemented.", message.command);
             }
@@ -446,6 +449,74 @@ impl Client {
                 if self.server.part_channel(target, &nick, &part_message).await {
                     self.channels.lock().await.remove(target);
                 }
+            }
+        }
+    }
+
+    async fn on_topic(&self, message: Message) {
+        /* TODO(diath): ERR_CHANOPRIVSNEEDED, ERR_NOCHANMODES */
+        if !*self.registered.lock().await {
+            return;
+        }
+
+        if message.params.len() < 1 {
+            self.send_numeric_reply(
+                NumericReply::ErrNeedMoreParams,
+                "TOPIC :Not enough parameters".to_string(),
+            )
+            .await;
+        } else if message.params.len() < 2 {
+            let channel = message.params[0].clone();
+            if self
+                .server
+                .is_channel_mapped(channel.clone().as_str())
+                .await
+            {
+                if let Some(topic) = self.server.get_channel_topic(&channel).await {
+                    let text = topic.text.lock().await;
+                    if text.len() == 0 {
+                        self.send_numeric_reply(
+                            NumericReply::RplNoTopic,
+                            format!("{} :No topic is set", channel).to_string(),
+                        )
+                        .await;
+                    } else {
+                        self.send_numeric_reply(
+                            NumericReply::RplTopic,
+                            format!("{} :{}", channel, text).to_string(),
+                        )
+                        .await;
+
+                        let set_by = topic.set_by.lock().await;
+                        let set_at = topic.set_at.lock().await;
+                        self.send_numeric_reply(
+                            NumericReply::RplTopicSet,
+                            format!("{} {} {}", channel, set_by, set_at).to_string(),
+                        )
+                        .await;
+                    }
+                }
+            } else {
+                self.send_numeric_reply(
+                    NumericReply::ErrNoSuchChannel,
+                    format!("{} :No such channel", channel).to_string(),
+                )
+                .await;
+            }
+        } else {
+            let channel = message.params[0].clone();
+            let nick = self.nick.lock().await.to_string();
+            if self.server.has_channel_participant(&channel, &nick).await {
+                self.server
+                    .set_channel_topic(nick, &channel, message.params[1].clone())
+                    .await;
+            } else {
+                self.send_numeric_reply(
+                    NumericReply::ErrNotOnChannel,
+                    format!("{} :You're not on that channel", message.params[0].clone())
+                        .to_string(),
+                )
+                .await;
             }
         }
     }

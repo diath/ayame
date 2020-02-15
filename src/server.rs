@@ -1,5 +1,6 @@
-use crate::channel::Channel;
+use crate::channel::{Channel, ChannelTopic};
 use crate::client::Client;
+use crate::replies::NumericReply;
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -158,6 +159,36 @@ impl Server {
                         client.send_raw(message.clone()).await;
                     }
                 }
+
+                if let Some(client) = self.clients.lock().await.get(nick) {
+                    let topic = channel.topic.lock().await;
+                    let text = topic.text.lock().await;
+                    if text.len() == 0 {
+                        client
+                            .send_numeric_reply(
+                                NumericReply::RplNoTopic,
+                                format!("{} :No topic is set", name).to_string(),
+                            )
+                            .await;
+                    } else {
+                        client
+                            .send_numeric_reply(
+                                NumericReply::RplTopic,
+                                format!("{} :{}", name, text).to_string(),
+                            )
+                            .await;
+
+                        let set_by = topic.set_by.lock().await;
+                        let set_at = topic.set_at.lock().await;
+                        client
+                            .send_numeric_reply(
+                                NumericReply::RplTopicSet,
+                                format!("{} {} {}", name, set_by, set_at).to_string(),
+                            )
+                            .await;
+                    }
+                }
+
                 return true;
             }
         }
@@ -204,6 +235,42 @@ impl Server {
             println!("[{}] {}: {}", name, sender, message);
 
             let message = format!(":{} PRIVMSG {} :{}", sender, name, message);
+            for target in &*channel.participants.lock().await {
+                if let Some(client) = self.clients.lock().await.get(target) {
+                    if client.get_prefix().await != sender {
+                        client.send_raw(message.clone()).await;
+                    }
+                }
+            }
+        }
+    }
+
+    pub async fn get_channel_topic(&self, name: &str) -> Option<Arc<ChannelTopic>> {
+        if let Some(channel) = self
+            .channels
+            .lock()
+            .await
+            .get(name.to_string().to_lowercase().as_str())
+        {
+            return Some(channel.topic.lock().await.clone());
+        }
+
+        None
+    }
+
+    pub async fn set_channel_topic(&self, sender: String, name: &str, topic: String) {
+        /* TODO(diath): This should broadcast user prefix and not nick. */
+        if let Some(channel) = self
+            .channels
+            .lock()
+            .await
+            .get(name.to_string().to_lowercase().as_str())
+        {
+            println!("[{}] {} changed topic to {}", name, sender, topic);
+            // NOTE(diath): The topic sender should be just the name, not the prefix.
+            channel.set_topic(sender.clone(), topic.clone()).await;
+
+            let message = format!(":{} TOPIC {} :{}", sender, name, topic);
             for target in &*channel.participants.lock().await {
                 if let Some(client) = self.clients.lock().await.get(target) {
                     if client.get_prefix().await != sender {
