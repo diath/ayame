@@ -3,6 +3,8 @@ use crate::client::Client;
 use crate::replies::NumericReply;
 
 use std::collections::HashMap;
+use std::fs::File;
+use std::io::{BufRead, BufReader};
 use std::sync::Arc;
 use std::time::SystemTime;
 use std::vec::Vec;
@@ -20,6 +22,7 @@ pub struct Server {
     clients_pending: Mutex<Vec<Arc<Client>>>,
     operators: Mutex<HashMap<String, String>>,
     channels: Mutex<HashMap<String, Channel>>,
+    motd: Option<Vec<String>>,
 }
 
 impl Server {
@@ -33,7 +36,23 @@ impl Server {
             clients_pending: Mutex::new(vec![]),
             operators: Mutex::new(HashMap::new()),
             channels: Mutex::new(HashMap::new()),
+            motd: Server::load_motd("motd.txt"),
         }
+    }
+
+    fn load_motd(filename: &str) -> Option<Vec<String>> {
+        let file = File::open(filename);
+        if !file.is_ok() {
+            return None;
+        }
+
+        let mut lines = vec![];
+        let reader = BufReader::new(file.unwrap());
+        for line in reader.lines() {
+            lines.push(line.unwrap());
+        }
+
+        Some(lines)
     }
 
     pub async fn accept(self) -> Result<(), Box<dyn std::error::Error>> {
@@ -278,6 +297,36 @@ impl Server {
                     }
                 }
             }
+        }
+    }
+
+    pub async fn send_motd(&self, client: &Client) {
+        if let Some(motd) = &self.motd {
+            client.send_numeric_reply(
+                NumericReply::RplMotdStart,
+                format!(":- {} Message of the day - ", self.name).to_string()
+            )
+            .await;
+
+            for line in motd {
+                client.send_numeric_reply(
+                    NumericReply::RplMotd,
+                    format!(":- {}", line).to_string()
+                )
+                .await;
+            }
+
+            client.send_numeric_reply(
+                NumericReply::RplEndOfMotd,
+                ":End of MOTD command".to_string()
+            )
+            .await;
+        } else {
+            client.send_numeric_reply(
+                NumericReply::ErrNoMotd,
+                ":MOTD File is missing".to_string()
+            )
+            .await;
         }
     }
 }
