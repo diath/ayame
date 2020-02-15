@@ -1,9 +1,9 @@
 name: Main
 
-on: push
+on: [push, pull_request]
 
 jobs:
-  codestyle:
+  rust:
     runs-on: ubuntu-latest
     steps:
       - name: Set up Rust
@@ -12,25 +12,6 @@ jobs:
           components: rustfmt
           rust-version: stable
       - uses: actions/checkout@v1
-      - run: cargo fmt --all -- --check
-
-  lint:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Set up Rust
-        uses: hecrj/setup-rust-action@v1
-        with:
-          components: clippy
-          rust-version: stable
-      - uses: actions/checkout@v1
-      - run: cargo clippy --all-targets --all-features -- -D clippy::all
-
-  compile:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Set up Rust
-        uses: hecrj/setup-rust-action@v1
-        with:
-          rust-version: stable
-      - uses: actions/checkout@master
-      - run: cargo check --all
+      - run:
+        - cargo fmt --all -- --check
+        - cargo check --all
