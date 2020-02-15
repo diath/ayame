@@ -12,6 +12,4 @@ jobs:
           components: rustfmt
           rust-version: stable
       - uses: actions/checkout@v1
-      - run:
-        - cargo fmt --all -- --check
-        - cargo check --all
+      - run: cargo fmt --all -- --check && cargo check --all
