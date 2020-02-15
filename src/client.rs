@@ -144,6 +144,7 @@ impl Client {
         )
         .await;
 
+        self.server.send_motd(&self).await;
         /* TODO(diath): Send RPL_MYINFO with <servername> <version> <user modes> <server modes>. */
     }
 
@@ -176,6 +177,9 @@ impl Client {
             }
             "TOPIC" => {
                 self.on_topic(message).await;
+            }
+            "MOTD" => {
+                self.on_motd(message).await;
             }
             _ => {
                 if *self.registered.lock().await {
@@ -536,5 +540,24 @@ impl Client {
                 .await;
             }
         }
+    }
+
+    async fn on_motd(&self, message: Message) {
+        if !*self.registered.lock().await {
+            return;
+        }
+
+        /* TODO(anyone-interested): add support for <target> */
+        if message.params.len() > 0 && message.params[0] != self.server.name {
+            self.send_numeric_reply(
+                NumericReply::ErrNoSuchServer,
+                format!("{} :No such server", message.params[0]).to_string(),
+            )
+            .await;
+
+            return;
+        }
+
+        self.server.send_motd(&self).await;
     }
 }
