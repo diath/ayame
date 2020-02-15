@@ -1,6 +1,7 @@
 use crate::replies::NumericReply;
 use crate::server::Server;
 
+use std::collections::HashSet;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
@@ -17,6 +18,7 @@ pub struct Client {
     pub password: Mutex<String>,
     pub registered: Mutex<bool>,
     pub operator: Mutex<bool>,
+    pub channels: Mutex<HashSet<String>>,
     server: Arc<Server>,
     address: SocketAddr,
     writer: Mutex<Option<WriteHalf<TcpStream>>>,
@@ -32,6 +34,7 @@ impl Client {
             password: Mutex::new(String::new()),
             registered: Mutex::new(false),
             operator: Mutex::new(false),
+            channels: Mutex::new(HashSet::new()),
             server: server,
             address: address,
             writer: Mutex::new(None),
@@ -373,17 +376,27 @@ impl Client {
         }
 
         let nick = self.nick.lock().await.to_string();
-        let targets = message.params[0].split(",");
-        for target in targets {
-            if target.len() == 0 {
-                continue;
+        if message.params[0] == "0" {
+            let nick = self.nick.lock().await;
+            for channel in &*self.channels.lock().await {
+                self.server.part_channel(&channel, &nick, "Leaving").await;
             }
+            self.channels.lock().await.clear();
+        } else {
+            let targets = message.params[0].split(",");
+            for target in targets {
+                if target.len() == 0 {
+                    continue;
+                }
 
-            if !self.server.is_channel_mapped(target).await {
-                self.server.create_channel(target).await;
+                if !self.server.is_channel_mapped(target).await {
+                    self.server.create_channel(target).await;
+                }
+
+                if self.server.join_channel(target, &nick).await {
+                    self.channels.lock().await.insert(target.to_string());
+                }
             }
-
-            self.server.join_channel(target, &nick).await;
         }
     }
 
@@ -430,7 +443,9 @@ impl Client {
                     continue;
                 }
 
-                self.server.part_channel(target, &nick, &part_message).await;
+                if self.server.part_channel(target, &nick, &part_message).await {
+                    self.channels.lock().await.remove(target);
+                }
             }
         }
     }

@@ -143,7 +143,7 @@ impl Server {
         false
     }
 
-    pub async fn join_channel(&self, name: &str, nick: &str) {
+    pub async fn join_channel(&self, name: &str, nick: &str) -> bool {
         /* TODO(diath): This should broadcast user prefix and not nick. */
         if let Some(channel) = self
             .channels
@@ -158,11 +158,14 @@ impl Server {
                         client.send_raw(message.clone()).await;
                     }
                 }
+                return true;
             }
         }
+
+        false
     }
 
-    pub async fn part_channel(&self, name: &str, nick: &str, part_message: &str) {
+    pub async fn part_channel(&self, name: &str, nick: &str, part_message: &str) -> bool {
         /* TODO(diath): This should broadcast user prefix and not nick. */
         if let Some(channel) = self
             .channels
@@ -182,8 +185,12 @@ impl Server {
                 if let Some(client) = self.clients.lock().await.get(nick) {
                     client.send_raw(message.clone()).await;
                 }
+
+                return true;
             }
         }
+
+        false
     }
 
     pub async fn forward_channel_message(&self, sender: String, name: &str, message: String) {
