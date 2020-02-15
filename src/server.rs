@@ -136,8 +136,8 @@ impl Server {
 
     pub async fn join_channel(&self, name: &str, nick: &str) {
         /* TODO(diath): This should broadcast user prefix and not nick. */
-        let message = format!(":{} JOIN {}", nick, name);
         if let Some(channel) = self.channels.lock().await.get(name) {
+            let message = format!(":{} JOIN {}", nick, name);
             if channel.join(nick.to_string()).await {
                 for target in &*channel.participants.lock().await {
                     if let Some(client) = self.clients.lock().await.get(target) {
@@ -150,8 +150,8 @@ impl Server {
 
     pub async fn part_channel(&self, name: &str, nick: &str, part_message: &str) {
         /* TODO(diath): This should broadcast user prefix and not nick. */
-        let message = format!(":{} PART :{}.", nick, part_message);
         if let Some(channel) = self.channels.lock().await.get(name) {
+            let message = format!(":{} PART :{}.", nick, part_message);
             if channel.part(nick.to_string()).await {
                 for target in &*channel.participants.lock().await {
                     if let Some(client) = self.clients.lock().await.get(target) {
@@ -164,10 +164,10 @@ impl Server {
 
     pub async fn forward_channel_message(&self, sender: String, name: &str, message: String) {
         /* TODO(diath): This should broadcast user prefix and not nick. */
-        let message = format!(":{} PRIVMSG {} :{}", sender, name, message);
         if let Some(channel) = self.channels.lock().await.get(name) {
             println!("[{}] {}: {}", name, sender, message);
 
+            let message = format!(":{} PRIVMSG {} :{}", sender, name, message);
             for target in &*channel.participants.lock().await {
                 if let Some(client) = self.clients.lock().await.get(target) {
                     client.send_raw(message.clone()).await;
