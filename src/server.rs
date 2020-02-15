@@ -37,12 +37,6 @@ impl Server {
 
     pub async fn accept(self) -> Result<(), Box<dyn std::error::Error>> {
         let server = Arc::new(self);
-        server
-            .channels
-            .lock()
-            .await
-            .insert("#lobby".to_string(), Channel::new("#lobby".to_string()));
-
         let mut acceptor = TcpListener::bind("127.0.0.1:6667").await?;
         loop {
             let (stream, addr) = acceptor.accept().await?;
@@ -124,6 +118,13 @@ impl Server {
 
     pub async fn is_channel_mapped(&self, name: &str) -> bool {
         self.channels.lock().await.contains_key(name)
+    }
+
+    pub async fn create_channel(&self, name: &str) {
+        self.channels
+            .lock()
+            .await
+            .insert(name.to_string(), Channel::new(name.to_string()));
     }
 
     pub async fn has_channel_participant(&self, name: &str, nick: &str) -> bool {

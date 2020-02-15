@@ -380,7 +380,7 @@ impl Client {
             }
 
             if !self.server.is_channel_mapped(target).await {
-                continue;
+                self.server.create_channel(target).await;
             }
 
             self.server.join_channel(target, &nick).await;
