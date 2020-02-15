@@ -22,8 +22,8 @@ jobs:
         with:
           components: clippy
           rust-version: stable
-          - uses: actions/checkout@v1
-      - run: cargo clippy --all-targets --all-features -- -D clippy::all
+        - uses: actions/checkout@v1
+        - run: cargo clippy --all-targets --all-features -- -D clippy::all
 
   compile:
     runs-on: ubuntu-latest
