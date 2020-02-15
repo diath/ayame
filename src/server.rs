@@ -170,7 +170,9 @@ impl Server {
             let message = format!(":{} PRIVMSG {} :{}", sender, name, message);
             for target in &*channel.participants.lock().await {
                 if let Some(client) = self.clients.lock().await.get(target) {
-                    client.send_raw(message.clone()).await;
+                    if client.get_prefix().await != sender {
+                        client.send_raw(message.clone()).await;
+                    }
                 }
             }
         }
