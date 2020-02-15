@@ -170,12 +170,17 @@ impl Server {
             .await
             .get(name.to_string().to_lowercase().as_str())
         {
-            let message = format!(":{} PART :{}.", nick, part_message);
+            let message = format!(":{} PART {} :{}.", nick, name, part_message);
             if channel.part(nick.to_string()).await {
                 for target in &*channel.participants.lock().await {
                     if let Some(client) = self.clients.lock().await.get(target) {
                         client.send_raw(message.clone()).await;
                     }
+                }
+
+                /* NOTE(diath): We need to send the confirmation to the sending client separately as they are no longer in the channel participant list. */
+                if let Some(client) = self.clients.lock().await.get(nick) {
+                    client.send_raw(message.clone()).await;
                 }
             }
         }
