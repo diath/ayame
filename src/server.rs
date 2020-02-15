@@ -117,19 +117,27 @@ impl Server {
     }
 
     pub async fn is_channel_mapped(&self, name: &str) -> bool {
-        self.channels.lock().await.contains_key(name)
-    }
-
-    pub async fn create_channel(&self, name: &str) {
         self.channels
             .lock()
             .await
-            .insert(name.to_string(), Channel::new(name.to_string()));
+            .contains_key(name.to_string().to_lowercase().as_str())
+    }
+
+    pub async fn create_channel(&self, name: &str) {
+        self.channels.lock().await.insert(
+            name.to_string().to_lowercase(),
+            Channel::new(name.to_string().to_lowercase()),
+        );
     }
 
     pub async fn has_channel_participant(&self, name: &str, nick: &str) -> bool {
-        if let Some(channel) = self.channels.lock().await.get(name) {
-            return channel.has_participant(nick.to_string()).await;
+        if let Some(channel) = self
+            .channels
+            .lock()
+            .await
+            .get(name.to_string().to_lowercase().as_str())
+        {
+            return channel.has_participant(nick).await;
         }
 
         false
@@ -137,7 +145,12 @@ impl Server {
 
     pub async fn join_channel(&self, name: &str, nick: &str) {
         /* TODO(diath): This should broadcast user prefix and not nick. */
-        if let Some(channel) = self.channels.lock().await.get(name) {
+        if let Some(channel) = self
+            .channels
+            .lock()
+            .await
+            .get(name.to_string().to_lowercase().as_str())
+        {
             let message = format!(":{} JOIN {}", nick, name);
             if channel.join(nick.to_string()).await {
                 for target in &*channel.participants.lock().await {
@@ -151,7 +164,12 @@ impl Server {
 
     pub async fn part_channel(&self, name: &str, nick: &str, part_message: &str) {
         /* TODO(diath): This should broadcast user prefix and not nick. */
-        if let Some(channel) = self.channels.lock().await.get(name) {
+        if let Some(channel) = self
+            .channels
+            .lock()
+            .await
+            .get(name.to_string().to_lowercase().as_str())
+        {
             let message = format!(":{} PART :{}.", nick, part_message);
             if channel.part(nick.to_string()).await {
                 for target in &*channel.participants.lock().await {
@@ -165,7 +183,12 @@ impl Server {
 
     pub async fn forward_channel_message(&self, sender: String, name: &str, message: String) {
         /* TODO(diath): This should broadcast user prefix and not nick. */
-        if let Some(channel) = self.channels.lock().await.get(name) {
+        if let Some(channel) = self
+            .channels
+            .lock()
+            .await
+            .get(name.to_string().to_lowercase().as_str())
+        {
             println!("[{}] {}: {}", name, sender, message);
 
             let message = format!(":{} PRIVMSG {} :{}", sender, name, message);

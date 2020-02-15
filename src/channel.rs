@@ -14,12 +14,12 @@ impl Channel {
         }
     }
 
-    pub async fn has_participant(&self, name: String) -> bool {
-        self.participants.lock().await.contains(&name)
+    pub async fn has_participant(&self, name: &str) -> bool {
+        self.participants.lock().await.contains(name)
     }
 
     pub async fn join(&self, name: String) -> bool {
-        if !self.has_participant(name.clone()).await {
+        if !self.has_participant(name.as_str()).await {
             self.participants.lock().await.insert(name.clone());
             println!("[{}] {} joined.", self.name, name);
             return true;
@@ -29,7 +29,7 @@ impl Channel {
     }
 
     pub async fn part(&self, name: String) -> bool {
-        if self.has_participant(name.clone()).await {
+        if self.has_participant(name.as_str()).await {
             self.participants.lock().await.remove(&name);
             println!("[{}] {} left.", self.name, name.clone());
             return true;
