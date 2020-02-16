@@ -52,6 +52,10 @@ impl Channel {
         false
     }
 
+    pub async fn remove(&self, name: String) {
+        self.participants.lock().await.remove(&name);
+    }
+
     pub async fn set_topic(&self, sender: String, text: String) {
         let topic = self.topic.lock().await;
         (*topic.text.lock().await) = text;
