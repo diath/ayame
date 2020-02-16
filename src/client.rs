@@ -1,6 +1,6 @@
 use crate::replies::NumericReply;
 use crate::server::Server;
-use crate::version::{IRCD_NAME, IRCD_VERSION};
+use crate::version::*;
 
 use std::collections::HashSet;
 use std::io::ErrorKind;
@@ -190,6 +190,9 @@ impl Client {
             }
             "MOTD" => {
                 self.on_motd(message).await;
+            }
+            "VERSION" => {
+                self.on_version(message).await;
             }
             "TIME" => {
                 self.on_time(message).await;
@@ -562,6 +565,28 @@ impl Client {
 
         /* TODO: add support for <target> */
         self.server.send_motd(&self).await;
+    }
+
+    pub async fn on_version(&self, message: Message) {
+        if message.params.len() > 0 {
+            if message.params[0] != self.server.name {
+                self.send_numeric_reply(
+                    NumericReply::ErrNoSuchServer,
+                    format!("{} :No such server", message.params[0]),
+                )
+                .await;
+                return;
+            }
+        }
+
+        self.send_numeric_reply(
+            NumericReply::RplVersion,
+            format!(
+                "{}-{}.0 {} :{}",
+                IRCD_NAME, IRCD_VERSION, self.server.name, IRCD_REPOSITORY
+            ),
+        )
+        .await;
     }
 
     async fn on_time(&self, _message: Message) {
