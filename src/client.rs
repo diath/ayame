@@ -132,7 +132,7 @@ impl Client {
         let prefix = self.get_prefix().await;
         self.send_numeric_reply(
             NumericReply::RplWelcome,
-            format!("Welcome to {} {}", self.server.name, prefix),
+            format!(":Welcome to {} {}", self.server.name, prefix),
         )
         .await;
 
@@ -140,7 +140,7 @@ impl Client {
         self.send_numeric_reply(
             NumericReply::RplYourHost,
             format!(
-                "Your host is {} running version {}-{}",
+                ":Your host is {} running version {}-{}",
                 self.server.name, IRCD_NAME, IRCD_VERSION
             ),
         )
@@ -149,7 +149,7 @@ impl Client {
         /* TODO(diath): We should probably store first startup time somewhere. */
         self.send_numeric_reply(
             NumericReply::RplCreated,
-            format!("This server was created {}", self.server.created),
+            format!(":This server was created {}", self.server.created),
         )
         .await;
 
