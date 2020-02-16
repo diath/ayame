@@ -304,6 +304,15 @@ impl Server {
         }
     }
 
+    pub async fn remove_from_channels(&self, client: &Client) {
+        let nick = client.nick.lock().await;
+        for channel_name in &*client.channels.lock().await {
+            if let Some(channel) = self.channels.lock().await.get(channel_name) {
+                channel.remove(nick.to_string()).await;
+            }
+        }
+    }
+
     pub async fn send_motd(&self, client: &Client) {
         if let Some(motd) = &*self.motd.lock().await {
             client

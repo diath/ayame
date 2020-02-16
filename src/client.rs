@@ -90,6 +90,8 @@ impl Client {
             line.clear();
         }
 
+        self.server.remove_from_channels(&self).await;
+
         let nick = self.nick.lock().await;
         if nick.len() != 0 {
             self.server.unmap_nick(nick.to_string()).await;
