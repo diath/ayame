@@ -22,7 +22,7 @@ pub struct Server {
     clients_pending: Mutex<Vec<Arc<Client>>>,
     operators: Mutex<HashMap<String, String>>,
     channels: Mutex<HashMap<String, Channel>>,
-    motd: Option<Vec<String>>,
+    motd: Mutex<Option<Vec<String>>>,
 }
 
 impl Server {
@@ -36,7 +36,7 @@ impl Server {
             clients_pending: Mutex::new(vec![]),
             operators: Mutex::new(HashMap::new()),
             channels: Mutex::new(HashMap::new()),
-            motd: Server::load_motd("motd.txt"),
+            motd: Mutex::new(Server::load_motd("motd.txt")),
         }
     }
 
@@ -53,6 +53,10 @@ impl Server {
         }
 
         Some(lines)
+    }
+
+    pub async fn reload_motd(&self) {
+        (*self.motd.lock().await) = Server::load_motd("motd.txt");
     }
 
     pub async fn accept(self) -> Result<(), Box<dyn std::error::Error>> {
@@ -300,8 +304,17 @@ impl Server {
         }
     }
 
+    pub async fn remove_from_channels(&self, client: &Client) {
+        let nick = client.nick.lock().await;
+        for channel_name in &*client.channels.lock().await {
+            if let Some(channel) = self.channels.lock().await.get(channel_name) {
+                channel.remove(nick.to_string()).await;
+            }
+        }
+    }
+
     pub async fn send_motd(&self, client: &Client) {
-        if let Some(motd) = &self.motd {
+        if let Some(motd) = &*self.motd.lock().await {
             client
                 .send_numeric_reply(
                     NumericReply::RplMotdStart,

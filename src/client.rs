@@ -91,6 +91,8 @@ impl Client {
             line.clear();
         }
 
+        self.server.remove_from_channels(&self).await;
+
         let nick = self.nick.lock().await;
         if nick.len() != 0 {
             self.server.unmap_nick(nick.to_string()).await;
@@ -196,6 +198,27 @@ impl Client {
             }
             "TIME" => {
                 self.on_time(message).await;
+            }
+            "REHASH" => {
+                self.on_rehash().await;
+            }
+            "DIE" | "RESTART" => {
+                if *self.registered.lock().await {
+                    self.send_numeric_reply(
+                        NumericReply::ErrNoPrivileges,
+                        ":Permission Denied- You're not an IRC operator".to_string(),
+                    )
+                    .await;
+                }
+            }
+            "SUMMON" => {
+                if *self.registered.lock().await {
+                    self.send_numeric_reply(
+                        NumericReply::ErrSummonDisabled,
+                        ":SUMMON has been disabled".to_string(),
+                    )
+                    .await;
+                }
             }
             _ => {
                 if *self.registered.lock().await {
@@ -621,5 +644,28 @@ impl Client {
             writer.flush();
             writer.shutdown();
         }
+    }
+
+    async fn on_rehash(&self) {
+        if !*self.registered.lock().await {
+            return;
+        }
+
+        if !*self.operator.lock().await {
+            self.send_numeric_reply(
+                NumericReply::ErrNoPrivileges,
+                ":Permission Denied- You're not an IRC operator".to_string(),
+            )
+            .await;
+
+            return;
+        }
+
+        self.send_numeric_reply(
+            NumericReply::RplRehashing,
+            "motd.txt :Rehashing".to_string(),
+        )
+        .await;
+        self.server.reload_motd().await;
     }
 }

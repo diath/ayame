@@ -10,6 +10,7 @@ pub enum NumericReply {
     RplMotdStart = 375,
     RplEndOfMotd = 376,
     RplYoureOper = 381,
+    RplRehashing = 382,
     RplTime = 391,
     ErrNoSuchNick = 401,
     ErrNoSuchServer = 402,
@@ -23,7 +24,9 @@ pub enum NumericReply {
     ErrErroneousNickname = 432,
     ErrNicknameInUse = 433,
     ErrNotOnChannel = 442,
+    ErrSummonDisabled = 445,
     ErrNeedMoreParams = 461,
     ErrAlreadyRegistered = 462,
     ErrPasswordMismatch = 464,
+    ErrNoPrivileges = 481,
 }
