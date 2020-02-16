@@ -2,6 +2,7 @@ mod channel;
 mod client;
 mod replies;
 mod server;
+mod version;
 
 use server::Server;
 

@@ -1,5 +1,6 @@
 use crate::replies::NumericReply;
 use crate::server::Server;
+use crate::version::{IRCD_NAME, IRCD_VERSION};
 
 use std::collections::HashSet;
 use std::io::ErrorKind;
@@ -139,8 +140,8 @@ impl Client {
         self.send_numeric_reply(
             NumericReply::RplYourHost,
             format!(
-                "Your host is {} running version {}",
-                self.server.name, "ayame 0.1.0"
+                "Your host is {} running version {}-{}",
+                self.server.name, IRCD_NAME, IRCD_VERSION
             ),
         )
         .await;
