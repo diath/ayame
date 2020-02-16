@@ -272,11 +272,12 @@ impl Client {
                     )
                     .await;
                 } else {
+                    let mut send_complete_registration = false;
                     if self.nick.lock().await.len() == 0 {
                         self.server.map_nick(nick.to_string(), &self).await;
 
                         if !*self.registered.lock().await && self.user.lock().await.len() != 0 {
-                            self.complete_registration().await;
+                            send_complete_registration = true;
                         }
                     } else {
                         self.server
@@ -284,6 +285,10 @@ impl Client {
                             .await;
                     }
                     (*self.nick.lock().await) = nick.to_string();
+
+                    if send_complete_registration {
+                        self.complete_registration().await;
+                    }
                 }
             }
         } else {
