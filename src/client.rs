@@ -1,6 +1,6 @@
+use crate::ayame::*;
 use crate::replies::NumericReply;
 use crate::server::Server;
-use crate::version::*;
 
 use std::collections::HashSet;
 use std::io::ErrorKind;
