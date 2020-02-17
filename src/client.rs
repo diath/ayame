@@ -190,6 +190,9 @@ impl Client {
             "TOPIC" => {
                 self.on_topic(message).await;
             }
+            "NAMES" => {
+                self.on_names(message).await;
+            }
             "MOTD" => {
                 self.on_motd(message).await;
             }
@@ -463,6 +466,9 @@ impl Client {
 
                 if self.server.join_channel(target, &nick).await {
                     self.channels.lock().await.insert(target.to_string());
+
+                    // NOTE(diath): This cannot be handled in Server::join_channel method or we will end up with a deadlock.
+                    self.server.send_names(self, target.to_string()).await;
                 }
             }
         }
@@ -583,6 +589,47 @@ impl Client {
                 )
                 .await;
             }
+        }
+    }
+
+    async fn on_names(&self, message: Message) {
+        /* TODO(diath): ERR_TOOMANYMATCHES */
+        if !*self.registered.lock().await {
+            return;
+        }
+
+        if message.params.len() > 1 {
+            if message.params[1] != self.server.name {
+                self.send_numeric_reply(
+                    NumericReply::ErrNoSuchServer,
+                    format!("{} :No such server", message.params[0]),
+                )
+                .await;
+                return;
+            }
+        }
+
+        if message.params.len() > 0 {
+            if let Some(_) = message.params[0].find(",") {
+                self.send_numeric_reply(
+                    NumericReply::ErrTooManyTargets,
+                    format!(
+                        "{} :Too many targets. The maximum is 1 for NAMES.",
+                        message.params[0]
+                    ),
+                )
+                .await;
+            } else {
+                self.server
+                    .send_names(self, message.params[0].clone())
+                    .await;
+            }
+        } else {
+            self.send_numeric_reply(
+                NumericReply::RplEndOfNames,
+                format!("{} :End of /NAMES list.", message.params[0]),
+            )
+            .await;
         }
     }
 

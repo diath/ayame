@@ -346,6 +346,43 @@ impl Server {
         }
     }
 
+    pub async fn send_names(&self, client: &Client, channel_name: String) {
+        let nick = client.nick.lock().await.to_string();
+        let is_operator = *client.operator.lock().await;
+
+        if !self.is_channel_mapped(&channel_name).await {
+            return;
+        }
+
+        if let Some(channel) = self.channels.lock().await.get(&channel_name) {
+            let has_participant = channel.has_participant(&nick).await;
+            if is_operator || has_participant {
+                /* TODO(diath): The names list should also contain user prefixes. */
+                let names = channel
+                    .participants
+                    .lock()
+                    .await
+                    .iter()
+                    .cloned()
+                    .collect::<Vec<String>>()
+                    .join(" ");
+                client
+                    .send_numeric_reply(
+                        NumericReply::RplNamReply,
+                        format!("= {} :{}", channel_name, names),
+                    )
+                    .await;
+            }
+        }
+
+        client
+            .send_numeric_reply(
+                NumericReply::RplEndOfNames,
+                format!("{} :End of /NAMES list.", channel_name),
+            )
+            .await;
+    }
+
     pub async fn send_motd(&self, client: &Client) {
         if let Some(motd) = &*self.motd.lock().await {
             client
