@@ -8,4 +8,6 @@ edition = "2018"
 tokio = { version = "0.2", features = ["full"] }
 futures = "0.3"
 chrono = "0.4"
+toml = "0.5"
+serde = { version = "1.0.104", features = ["derive"] }
 ircmsgprs = "0.2.0"

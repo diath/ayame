@@ -1,10 +1,13 @@
+use crate::ayame::*;
 use crate::channel::{Channel, ChannelTopic};
 use crate::client::Client;
+use crate::config::Config;
 use crate::replies::NumericReply;
 
 use std::collections::{HashMap, HashSet};
-use std::fs::File;
+use std::fs::{read_to_string, File};
 use std::io::{BufRead, BufReader};
+use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::SystemTime;
 use std::vec::Vec;
@@ -18,6 +21,7 @@ use tokio::sync::Mutex;
 pub struct Server {
     pub name: String,
     pub created: String,
+    address: SocketAddr,
     clients: Mutex<HashMap<String, Arc<Client>>>,
     clients_pending: Mutex<Vec<Arc<Client>>>,
     operators: Mutex<HashMap<String, String>>,
@@ -26,17 +30,44 @@ pub struct Server {
 }
 
 impl Server {
-    pub fn new(name: String) -> Server {
+    pub fn new() -> Server {
         let dt = DateTime::<Utc>::from(SystemTime::now());
+        let config = Server::load_config();
+
+        let name = config.server.name.unwrap_or(IRCD_NAME.to_string());
+        let motd_path = config.server.motd_path.unwrap_or(IRCD_MOTD.to_string());
+        let host = config.server.host.unwrap_or("127.0.0.1".to_string());
+        let port = config.server.port.unwrap_or(6667);
+
+        println!("Server: {}", name);
+        println!("Address: {}:{}", host, port);
 
         Server {
             name: name,
             created: dt.format("%Y-%m-%d %H:%M:%S.%f").to_string(),
+            address: format!("{}:{}", host, port).parse().unwrap(),
             clients: Mutex::new(HashMap::new()),
             clients_pending: Mutex::new(vec![]),
             operators: Mutex::new(HashMap::new()),
             channels: Mutex::new(HashMap::new()),
-            motd: Mutex::new(Server::load_motd("motd.txt")),
+            motd: Mutex::new(Server::load_motd(&motd_path)),
+        }
+    }
+
+    fn load_config() -> Config {
+        match read_to_string(IRCD_CONFIG) {
+            Ok(s) => match toml::from_str(&s) {
+                Ok(config) => config,
+                Err(error) => {
+                    eprintln!("Config parse error: {}", error);
+                    Config {
+                        ..Default::default()
+                    }
+                }
+            },
+            Err(_) => Config {
+                ..Default::default()
+            },
         }
     }
 
@@ -61,7 +92,9 @@ impl Server {
 
     pub async fn accept(self) -> Result<(), Box<dyn std::error::Error>> {
         let server = Arc::new(self);
-        let mut acceptor = TcpListener::bind("127.0.0.1:6667").await?;
+        let mut acceptor = TcpListener::bind(server.address).await?;
+        println!("Listening...");
+
         loop {
             let (stream, addr) = acceptor.accept().await?;
             let client = Arc::new(Client::new(server.clone(), addr));
