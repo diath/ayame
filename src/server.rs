@@ -56,7 +56,15 @@ impl Server {
 
     fn load_config() -> Config {
         match read_to_string(IRCD_CONFIG) {
-            Ok(s) => toml::from_str(&s).unwrap(),
+            Ok(s) => match toml::from_str(&s) {
+                Ok(config) => config,
+                Err(error) => {
+                    eprintln!("Config parse error: {}", error);
+                    Config {
+                        ..Default::default()
+                    }
+                }
+            },
             Err(_) => Config {
                 ..Default::default()
             },
