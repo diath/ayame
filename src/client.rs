@@ -280,8 +280,10 @@ impl Client {
                             send_complete_registration = true;
                         }
                     } else {
+                        let prefix = self.get_prefix().await;
+                        let old_nick = self.nick.lock().await;
                         self.server
-                            .remap_nick(self.nick.lock().await.to_string(), nick.to_string())
+                            .remap_nick(prefix.clone(), old_nick.to_string(), nick.to_string())
                             .await;
                     }
                     (*self.nick.lock().await) = nick.to_string();
