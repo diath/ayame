@@ -409,6 +409,61 @@ impl Server {
             .await;
     }
 
+    pub async fn send_list(&self, client: &Client, channels: Option<String>) {
+        client
+            .send_numeric_reply(NumericReply::RplListStart, format!("Channel :Users  Name"))
+            .await;
+
+        // TODO(diath): Secret channels should be hidden from the list if the user is not an operator.
+        if let Some(names) = channels {
+            for channel_name in names.split(",") {
+                if channel_name.len() == 0 {
+                    continue;
+                }
+
+                if let Some(channel) = self.channels.lock().await.get(channel_name) {
+                    let topic = channel.topic.lock().await;
+                    let participants = channel.participants.lock().await;
+
+                    client
+                        .send_numeric_reply(
+                            NumericReply::RplList,
+                            format!(
+                                "{} {} :{} {}",
+                                channel.name,
+                                participants.len(),
+                                channel.get_modes_description(),
+                                topic.text.lock().await
+                            ),
+                        )
+                        .await;
+                }
+            }
+        } else {
+            for (_, channel) in &*self.channels.lock().await {
+                let topic = channel.topic.lock().await;
+                let participants = channel.participants.lock().await;
+
+                client
+                    .send_numeric_reply(
+                        NumericReply::RplList,
+                        format!(
+                            "{} {} :{} {}",
+                            channel.name,
+                            participants.len(),
+                            channel.get_modes_description(),
+                            topic.text.lock().await
+                        ),
+                    )
+                    .await;
+            }
+        }
+
+        client
+            .send_numeric_reply(NumericReply::RplListEnd, format!(":End of /LIST"))
+            .await;
+    }
+
     pub async fn send_motd(&self, client: &Client) {
         if let Some(motd) = &*self.motd.lock().await {
             client

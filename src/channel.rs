@@ -1,4 +1,5 @@
 use std::collections::HashSet;
+use std::fmt::Write;
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -76,5 +77,15 @@ impl Channel {
             Ok(duration) => (*topic.set_at.lock().await) = duration.as_secs(),
             Err(_) => (*topic.set_at.lock().await) = 0,
         }
+    }
+
+    pub fn get_modes_description(&self) -> String {
+        let mut desc = "[+".to_string();
+        if self.modes.no_external_messages {
+            write!(desc, "n").expect("");
+        }
+
+        write!(desc, "]").expect("");
+        desc
     }
 }

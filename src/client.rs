@@ -193,6 +193,9 @@ impl Client {
             "NAMES" => {
                 self.on_names(message).await;
             }
+            "LIST" => {
+                self.on_list(message).await;
+            }
             "MOTD" => {
                 self.on_motd(message).await;
             }
@@ -608,6 +611,27 @@ impl Client {
                 format!("{} :End of /NAMES list.", message.params[0]),
             )
             .await;
+        }
+    }
+
+    async fn on_list(&self, message: Message) {
+        if message.params.len() > 1 {
+            if message.params[1] != self.server.name {
+                self.send_numeric_reply(
+                    NumericReply::ErrNoSuchServer,
+                    format!("{} :No such server", message.params[1]),
+                )
+                .await;
+                return;
+            }
+        }
+
+        if message.params.len() > 0 {
+            self.server
+                .send_list(self, Some(message.params[0].clone()))
+                .await;
+        } else {
+            self.server.send_list(self, None).await;
         }
     }
 
