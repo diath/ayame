@@ -12,9 +12,9 @@ pub struct ChannelTopic {
     pub set_at: Mutex<u64>,
 }
 
-#[derive(Default)]
 pub struct ChannelModes {
     pub no_external_messages: bool,
+    pub secret: bool,
 }
 
 pub struct Channel {
@@ -34,7 +34,7 @@ impl Channel {
             participants: Mutex::new(HashSet::new()),
             modes: ChannelModes {
                 no_external_messages: true,
-                ..Default::default()
+                secret: false,
             },
         }
     }
@@ -83,6 +83,10 @@ impl Channel {
         let mut desc = "[+".to_string();
         if self.modes.no_external_messages {
             write!(desc, "n").expect("");
+        }
+
+        if self.modes.secret {
+            write!(desc, "s").expect("");
         }
 
         write!(desc, "]").expect("");

@@ -422,8 +422,14 @@ impl Server {
                 }
 
                 if let Some(channel) = self.channels.lock().await.get(channel_name) {
+                    let oper = *client.operator.lock().await;
+                    let nick = client.nick.lock().await.to_string();
                     let topic = channel.topic.lock().await;
                     let participants = channel.participants.lock().await;
+
+                    if channel.modes.secret && !oper && !participants.contains(&nick) {
+                        continue;
+                    }
 
                     client
                         .send_numeric_reply(
@@ -441,8 +447,14 @@ impl Server {
             }
         } else {
             for (_, channel) in &*self.channels.lock().await {
+                let oper = *client.operator.lock().await;
+                let nick = client.nick.lock().await.to_string();
                 let topic = channel.topic.lock().await;
                 let participants = channel.participants.lock().await;
+
+                if channel.modes.secret && !oper && !participants.contains(&nick) {
+                    continue;
+                }
 
                 client
                     .send_numeric_reply(
