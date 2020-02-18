@@ -414,7 +414,6 @@ impl Server {
             .send_numeric_reply(NumericReply::RplListStart, format!("Channel :Users  Name"))
             .await;
 
-        // TODO(diath): Secret channels should be hidden from the list if the user is not an operator.
         if let Some(names) = channels {
             for channel_name in names.split(",") {
                 if channel_name.len() == 0 {
