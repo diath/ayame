@@ -384,31 +384,9 @@ impl Client {
 
                 match &target[0..1] {
                     "#" => {
-                        if self.server.is_channel_mapped(target).await {
-                            let nick = self.nick.lock().await.to_string();
-                            if self.server.has_channel_participant(target, &nick).await {
-                                self.server
-                                    .forward_channel_message(
-                                        self.get_prefix().await,
-                                        target,
-                                        text.clone(),
-                                    )
-                                    .await;
-                            } else {
-                                /* TODO(diath): Check for channel +n mode (if user not on a channel) or channel +m mode (if user not +v) */
-                                self.send_numeric_reply(
-                                    NumericReply::ErrCannotSendToChan,
-                                    format!("{} :Cannot send to channel", target).to_string(),
-                                )
-                                .await;
-                            }
-                        } else {
-                            self.send_numeric_reply(
-                                NumericReply::ErrNoSuchChannel,
-                                format!("{} :No such channel", target).to_string(),
-                            )
+                        self.server
+                            .forward_channel_message(self, target, text.clone())
                             .await;
-                        }
                     }
                     //* NOTE(diath): Technically a channel can be prefixed with either # (network), ! (safe), + (unmoderated) or & (local) but we only support #. */
                     "!" | "&" | "+" => {

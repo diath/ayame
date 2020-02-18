@@ -11,10 +11,16 @@ pub struct ChannelTopic {
     pub set_at: Mutex<u64>,
 }
 
+#[derive(Default)]
+pub struct ChannelModes {
+    pub no_external_messages: bool,
+}
+
 pub struct Channel {
     pub name: String,
     pub participants: Mutex<HashSet<String>>,
     pub topic: Mutex<Arc<ChannelTopic>>,
+    pub modes: ChannelModes,
 }
 
 impl Channel {
@@ -25,6 +31,10 @@ impl Channel {
                 ..Default::default()
             })),
             participants: Mutex::new(HashSet::new()),
+            modes: ChannelModes {
+                no_external_messages: true,
+                ..Default::default()
+            },
         }
     }
 
