@@ -619,7 +619,7 @@ impl Client {
             if message.params[1] != self.server.name {
                 self.send_numeric_reply(
                     NumericReply::ErrNoSuchServer,
-                    format!("{} :No such server", message.params[0]),
+                    format!("{} :No such server", message.params[1]),
                 )
                 .await;
                 return;
