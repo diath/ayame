@@ -200,7 +200,7 @@ impl Server {
         false
     }
 
-    pub async fn join_channel(&self, name: &str, nick: &str) -> bool {
+    pub async fn join_channel(&self, name: &str, client: &Client) -> bool {
         /* TODO(diath): This should broadcast user prefix and not nick. */
         if let Some(channel) = self
             .channels
@@ -208,43 +208,63 @@ impl Server {
             .await
             .get(name.to_string().to_lowercase().as_str())
         {
+            let oper = *client.operator.lock().await;
+            let nick = client.nick.lock().await.to_string();
+            if channel.has_participant(&nick).await {
+                return false;
+            }
+
+            if !oper
+                && channel.modes.limit != 0
+                && channel.participants.lock().await.len() >= channel.modes.limit
+            {
+                client
+                    .send_numeric_reply(
+                        NumericReply::ErrChannelIsFull,
+                        format!("{} :Cannot join channel (+l)", name).to_string(),
+                    )
+                    .await;
+                return false;
+            }
+
+            channel.participants.lock().await.insert(nick.clone());
+
             let message = format!(":{} JOIN {}", nick, name);
-            if channel.join(nick.to_string()).await {
-                for target in &*channel.participants.lock().await {
-                    if let Some(client) = self.clients.lock().await.get(target) {
-                        client.send_raw(message.clone()).await;
-                    }
+            for target in &*channel.participants.lock().await {
+                if let Some(client) = self.clients.lock().await.get(target) {
+                    client.send_raw(message.clone()).await;
+                }
+            }
+
+            if let Some(client) = self.clients.lock().await.get(&nick) {
+                let topic = channel.topic.lock().await;
+                let text = topic.text.lock().await;
+                if text.len() == 0 {
+                    client
+                        .send_numeric_reply(
+                            NumericReply::RplNoTopic,
+                            format!("{} :No topic is set", name).to_string(),
+                        )
+                        .await;
+                } else {
+                    client
+                        .send_numeric_reply(
+                            NumericReply::RplTopic,
+                            format!("{} :{}", name, text).to_string(),
+                        )
+                        .await;
+
+                    let set_by = topic.set_by.lock().await;
+                    let set_at = topic.set_at.lock().await;
+                    client
+                        .send_numeric_reply(
+                            NumericReply::RplTopicSet,
+                            format!("{} {} {}", name, set_by, set_at).to_string(),
+                        )
+                        .await;
                 }
 
-                if let Some(client) = self.clients.lock().await.get(nick) {
-                    let topic = channel.topic.lock().await;
-                    let text = topic.text.lock().await;
-                    if text.len() == 0 {
-                        client
-                            .send_numeric_reply(
-                                NumericReply::RplNoTopic,
-                                format!("{} :No topic is set", name).to_string(),
-                            )
-                            .await;
-                    } else {
-                        client
-                            .send_numeric_reply(
-                                NumericReply::RplTopic,
-                                format!("{} :{}", name, text).to_string(),
-                            )
-                            .await;
-
-                        let set_by = topic.set_by.lock().await;
-                        let set_at = topic.set_at.lock().await;
-                        client
-                            .send_numeric_reply(
-                                NumericReply::RplTopicSet,
-                                format!("{} {} {}", name, set_by, set_at).to_string(),
-                            )
-                            .await;
-                    }
-                }
-
+                println!("[{}] {} joined.", name, nick);
                 return true;
             }
         }

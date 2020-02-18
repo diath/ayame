@@ -34,5 +34,6 @@ pub enum NumericReply {
     ErrNeedMoreParams = 461,
     ErrAlreadyRegistered = 462,
     ErrPasswordMismatch = 464,
+    ErrChannelIsFull = 471,
     ErrNoPrivileges = 481,
 }

@@ -427,9 +427,8 @@ impl Client {
             return;
         }
 
-        let nick = self.nick.lock().await.to_string();
         if message.params[0] == "0" {
-            let nick = self.nick.lock().await;
+            let nick = self.nick.lock().await.to_string();
             for channel in &*self.channels.lock().await {
                 self.server.part_channel(&channel, &nick, "Leaving").await;
             }
@@ -445,7 +444,7 @@ impl Client {
                     self.server.create_channel(target).await;
                 }
 
-                if self.server.join_channel(target, &nick).await {
+                if self.server.join_channel(target, self).await {
                     self.channels.lock().await.insert(target.to_string());
 
                     // NOTE(diath): This cannot be handled in Server::join_channel method or we will end up with a deadlock.

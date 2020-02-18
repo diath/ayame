@@ -13,6 +13,7 @@ pub struct ChannelTopic {
 }
 
 pub struct ChannelModes {
+    pub limit: usize,
     pub no_external_messages: bool,
     pub secret: bool,
 }
@@ -33,6 +34,7 @@ impl Channel {
             })),
             participants: Mutex::new(HashSet::new()),
             modes: ChannelModes {
+                limit: 0,
                 no_external_messages: true,
                 secret: false,
             },
@@ -41,16 +43,6 @@ impl Channel {
 
     pub async fn has_participant(&self, name: &str) -> bool {
         self.participants.lock().await.contains(name)
-    }
-
-    pub async fn join(&self, name: String) -> bool {
-        if !self.has_participant(name.as_str()).await {
-            self.participants.lock().await.insert(name.clone());
-            println!("[{}] {} joined.", self.name, name);
-            return true;
-        }
-
-        false
     }
 
     pub async fn part(&self, name: String) -> bool {
@@ -81,6 +73,11 @@ impl Channel {
 
     pub fn get_modes_description(&self) -> String {
         let mut desc = "[+".to_string();
+
+        if self.modes.limit != 0 {
+            write!(desc, "l").expect("");
+        }
+
         if self.modes.no_external_messages {
             write!(desc, "n").expect("");
         }
