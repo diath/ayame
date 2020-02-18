@@ -414,7 +414,6 @@ impl Server {
             .send_numeric_reply(NumericReply::RplListStart, format!("Channel :Users  Name"))
             .await;
 
-        // TODO(diath): Secret channels should be hidden from the list if the user is not an operator.
         if let Some(names) = channels {
             for channel_name in names.split(",") {
                 if channel_name.len() == 0 {
@@ -422,8 +421,14 @@ impl Server {
                 }
 
                 if let Some(channel) = self.channels.lock().await.get(channel_name) {
+                    let oper = *client.operator.lock().await;
+                    let nick = client.nick.lock().await.to_string();
                     let topic = channel.topic.lock().await;
                     let participants = channel.participants.lock().await;
+
+                    if channel.modes.secret && !oper && !participants.contains(&nick) {
+                        continue;
+                    }
 
                     client
                         .send_numeric_reply(
@@ -441,8 +446,14 @@ impl Server {
             }
         } else {
             for (_, channel) in &*self.channels.lock().await {
+                let oper = *client.operator.lock().await;
+                let nick = client.nick.lock().await.to_string();
                 let topic = channel.topic.lock().await;
                 let participants = channel.participants.lock().await;
+
+                if channel.modes.secret && !oper && !participants.contains(&nick) {
+                    continue;
+                }
 
                 client
                     .send_numeric_reply(
