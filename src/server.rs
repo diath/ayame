@@ -280,7 +280,7 @@ impl Server {
         false
     }
 
-    pub async fn forward_channel_message(&self, sender: String, name: &str, message: String) {
+    pub async fn forward_channel_message(&self, client: &Client, name: &str, message: String) {
         /* TODO(diath): This should broadcast user prefix and not nick. */
         if let Some(channel) = self
             .channels
@@ -288,16 +288,42 @@ impl Server {
             .await
             .get(name.to_string().to_lowercase().as_str())
         {
-            println!("[{}] {}: {}", name, sender, message);
+            let prefix = client.get_prefix().await;
+            let nick = client.nick.lock().await.to_string();
 
-            let message = format!(":{} PRIVMSG {} :{}", sender, name, message);
+            // NOTE(diath): Operators can always send messages to any channel.
+            if !*client.operator.lock().await {
+                if !channel.has_participant(&nick).await && channel.modes.no_external_messages {
+                    client
+                        .send_numeric_reply(
+                            NumericReply::ErrCannotSendToChan,
+                            format!("{} :No external messages allowed ({})", &name, &name)
+                                .to_string(),
+                        )
+                        .await;
+                    return;
+                }
+
+                // TODO(diath): Check for channel +m mode and user -v mode.
+            }
+
+            println!("[{}] {}: {}", name, prefix, message);
+
+            let message = format!(":{} PRIVMSG {} :{}", prefix, name, message);
             for target in &*channel.participants.lock().await {
                 if let Some(client) = self.clients.lock().await.get(target) {
-                    if client.get_prefix().await != sender {
+                    if client.get_prefix().await != prefix {
                         client.send_raw(message.clone()).await;
                     }
                 }
             }
+        } else {
+            client
+                .send_numeric_reply(
+                    NumericReply::ErrNoSuchChannel,
+                    format!("{} :No such nick/channel", &name).to_string(),
+                )
+                .await;
         }
     }
 
