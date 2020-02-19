@@ -290,8 +290,9 @@ impl Server {
             .await
             .get(name.to_string().to_lowercase().as_str())
         {
-            let message = format!(":{} PART {} :{}.", nick, name, part_message);
             if channel.part(nick.to_string()).await {
+                let message = format!(":{} PART {} :{}", nick, name, part_message);
+
                 for target in &*channel.participants.lock().await {
                     if let Some(client) = self.clients.lock().await.get(target) {
                         client.send_raw(message.clone()).await;
@@ -307,6 +308,34 @@ impl Server {
             }
         }
 
+        false
+    }
+
+    pub async fn kick_channel(
+        &self,
+        name: &str,
+        nick: &str,
+        kicked: &str,
+        kick_message: String,
+    ) -> bool {
+        /* TODO(diath): This should broadcast user prefix and not nick. */
+        if let Some(channel) = self
+            .channels
+            .lock()
+            .await
+            .get(name.to_string().to_lowercase().as_str())
+        {
+            let message = format!(":{} KICK {} {} :{}", nick, name, kicked, kick_message);
+            for target in &*channel.participants.lock().await {
+                if let Some(client) = self.clients.lock().await.get(target) {
+                    client.send_raw(message.clone()).await;
+                }
+            }
+
+            channel.remove(kicked.to_string()).await;
+
+            return true;
+        }
         false
     }
 
