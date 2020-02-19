@@ -603,7 +603,6 @@ impl Client {
                 "KICK :Not enough parameters".to_string(),
             )
             .await;
-            return;
         } else {
             let nick = self.nick.lock().await.to_string();
             let targets = message.params[0].split(",").collect::<Vec<&str>>();
