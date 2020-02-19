@@ -603,30 +603,67 @@ impl Client {
                 "KICK :Not enough parameters".to_string(),
             )
             .await;
-        } else {
-            let nick = self.nick.lock().await.to_string();
-            let targets = message.params[0].split(",").collect::<Vec<&str>>();
-            let users = message.params[1].split(",").collect::<Vec<&str>>();
-            let message = if message.params.len() > 2 {
-                message.params[2].clone()
-            } else {
-                "Kicked".to_string()
-            };
+            return;
+        }
 
-            /* NOTE(diath): For the message to be syntactically correct, there MUST be either one channel parameter and multiple user
-            parameter, or as many channel parameters as there are user parameters. */
-            if targets.len() == 1 && users.len() > 0 {
-                let target = targets[0];
-                if target.len() == 0 {
-                    return;
+        let nick = self.nick.lock().await.to_string();
+        let targets = message.params[0].split(",").collect::<Vec<&str>>();
+        let users = message.params[1].split(",").collect::<Vec<&str>>();
+        let message = if message.params.len() > 2 {
+            message.params[2].clone()
+        } else {
+            "Kicked".to_string()
+        };
+
+        /* NOTE(diath): For the message to be syntactically correct, there MUST be either one channel parameter and multiple user
+        parameter, or as many channel parameters as there are user parameters. */
+        if targets.len() == 1 && users.len() > 0 {
+            let target = targets[0];
+            if target.len() == 0 {
+                return;
+            }
+
+            if !self.server.is_channel_mapped(&target).await {
+                self.send_numeric_reply(
+                    NumericReply::ErrNoSuchChannel,
+                    format!("{} :No such channel", target).to_string(),
+                )
+                .await;
+                return;
+            }
+
+            if !self.server.has_channel_participant(&target, &nick).await {
+                self.send_numeric_reply(
+                    NumericReply::ErrNotOnChannel,
+                    format!("{} :You're not on that channel", target).to_string(),
+                )
+                .await;
+                return;
+            }
+
+            for user in users {
+                if !self.server.has_channel_participant(&target, user).await {
+                    self.send_numeric_reply(
+                        NumericReply::ErrUserNotInChannel,
+                        format!("{} {} :They aren't on that channel", user, target).to_string(),
+                    )
+                    .await;
+                    continue;
                 }
 
+                self.server
+                    .kick_channel(target, &nick, user, message.clone())
+                    .await;
+            }
+        } else if targets.len() == users.len() {
+            for (index, target) in targets.iter().enumerate() {
                 if !self.server.is_channel_mapped(&target).await {
                     self.send_numeric_reply(
                         NumericReply::ErrNoSuchChannel,
                         format!("{} :No such channel", target).to_string(),
                     )
                     .await;
+                    continue;
                 }
 
                 if !self.server.has_channel_participant(&target, &nick).await {
@@ -635,54 +672,22 @@ impl Client {
                         format!("{} :You're not on that channel", target).to_string(),
                     )
                     .await;
+                    continue;
                 }
 
-                for user in users {
-                    if !self.server.has_channel_participant(&target, user).await {
-                        self.send_numeric_reply(
-                            NumericReply::ErrUserNotInChannel,
-                            format!("{} {} :They aren't on that channel", user, target).to_string(),
-                        )
-                        .await;
-                        continue;
-                    }
-
-                    self.server
-                        .kick_channel(target, &nick, user, message.clone())
-                        .await;
+                let user = users.get(index).unwrap();
+                if !self.server.has_channel_participant(&target, user).await {
+                    self.send_numeric_reply(
+                        NumericReply::ErrUserNotInChannel,
+                        format!("{} {} :They aren't on that channel", user, target).to_string(),
+                    )
+                    .await;
+                    continue;
                 }
-            } else if targets.len() == users.len() {
-                for (index, target) in targets.iter().enumerate() {
-                    if !self.server.is_channel_mapped(&target).await {
-                        self.send_numeric_reply(
-                            NumericReply::ErrNoSuchChannel,
-                            format!("{} :No such channel", target).to_string(),
-                        )
-                        .await;
-                    }
 
-                    if !self.server.has_channel_participant(&target, &nick).await {
-                        self.send_numeric_reply(
-                            NumericReply::ErrNotOnChannel,
-                            format!("{} :You're not on that channel", target).to_string(),
-                        )
-                        .await;
-                    }
-
-                    let user = users.get(index).unwrap();
-                    if !self.server.has_channel_participant(&target, user).await {
-                        self.send_numeric_reply(
-                            NumericReply::ErrUserNotInChannel,
-                            format!("{} {} :They aren't on that channel", user, target).to_string(),
-                        )
-                        .await;
-                        continue;
-                    }
-
-                    self.server
-                        .kick_channel(target, &nick, user, message.clone())
-                        .await;
-                }
+                self.server
+                    .kick_channel(target, &nick, user, message.clone())
+                    .await;
             }
         }
     }
