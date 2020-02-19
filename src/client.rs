@@ -704,47 +704,51 @@ impl Client {
                 ":No recipient given (PRIVMSG)".to_string(),
             )
             .await;
-        } else if message.params.len() < 2 {
+            return;
+        }
+
+        if message.params.len() < 2 {
             self.send_numeric_reply(
                 NumericReply::ErrNoTextToSend,
                 ":No text to send".to_string(),
             )
             .await;
-        } else {
-            let targets = message.params[0].split(",");
-            let text = message.params[1].clone();
+            return;
+        }
 
-            for target in targets {
-                if target.len() == 0 {
-                    continue;
+        let targets = message.params[0].split(",");
+        let text = message.params[1].clone();
+
+        for target in targets {
+            if target.len() == 0 {
+                continue;
+            }
+
+            match &target[0..1] {
+                "#" => {
+                    self.server
+                        .forward_channel_message(self, target, text.clone())
+                        .await;
                 }
-
-                match &target[0..1] {
-                    "#" => {
+                //* NOTE(diath): Technically a channel can be prefixed with either # (network), ! (safe), + (unmoderated) or & (local) but we only support #. */
+                "!" | "&" | "+" => {
+                    self.send_numeric_reply(
+                        NumericReply::ErrNoSuchChannel,
+                        format!("{} :No such channel", target).to_string(),
+                    )
+                    .await;
+                }
+                _ => {
+                    if self.server.is_nick_mapped(target).await {
                         self.server
-                            .forward_channel_message(self, target, text.clone())
+                            .forward_message(self.get_prefix().await, target, text.clone())
                             .await;
-                    }
-                    //* NOTE(diath): Technically a channel can be prefixed with either # (network), ! (safe), + (unmoderated) or & (local) but we only support #. */
-                    "!" | "&" | "+" => {
+                    } else {
                         self.send_numeric_reply(
-                            NumericReply::ErrNoSuchChannel,
-                            format!("{} :No such channel", target).to_string(),
+                            NumericReply::ErrNoSuchNick,
+                            format!("{} :No such nick/channel", target).to_string(),
                         )
                         .await;
-                    }
-                    _ => {
-                        if self.server.is_nick_mapped(target).await {
-                            self.server
-                                .forward_message(self.get_prefix().await, target, text.clone())
-                                .await;
-                        } else {
-                            self.send_numeric_reply(
-                                NumericReply::ErrNoSuchNick,
-                                format!("{} :No such nick/channel", target).to_string(),
-                            )
-                            .await;
-                        }
                     }
                 }
             }
