@@ -35,5 +35,6 @@ pub enum NumericReply {
     ErrAlreadyRegistered = 462,
     ErrPasswordMismatch = 464,
     ErrChannelIsFull = 471,
+    ErrBadChannelKey = 475,
     ErrNoPrivileges = 481,
 }

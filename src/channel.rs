@@ -13,6 +13,7 @@ pub struct ChannelTopic {
 }
 
 pub struct ChannelModes {
+    pub password: String,
     pub limit: usize,
     pub no_external_messages: bool,
     pub secret: bool,
@@ -34,6 +35,7 @@ impl Channel {
             })),
             participants: Mutex::new(HashSet::new()),
             modes: ChannelModes {
+                password: "".to_string(),
                 limit: 0,
                 no_external_messages: true,
                 secret: false,
@@ -73,6 +75,10 @@ impl Channel {
 
     pub fn get_modes_description(&self) -> String {
         let mut desc = "[+".to_string();
+
+        if self.modes.password.len() != 0 {
+            write!(desc, "k").expect("");
+        }
 
         if self.modes.limit != 0 {
             write!(desc, "l").expect("");
