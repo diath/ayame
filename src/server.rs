@@ -200,7 +200,7 @@ impl Server {
         false
     }
 
-    pub async fn join_channel(&self, name: &str, client: &Client) -> bool {
+    pub async fn join_channel(&self, name: &str, password: String, client: &Client) -> bool {
         /* TODO(diath): This should broadcast user prefix and not nick. */
         if let Some(channel) = self
             .channels
@@ -222,6 +222,16 @@ impl Server {
                     .send_numeric_reply(
                         NumericReply::ErrChannelIsFull,
                         format!("{} :Cannot join channel (+l)", name).to_string(),
+                    )
+                    .await;
+                return false;
+            }
+
+            if !oper && channel.modes.password.len() != 0 && channel.modes.password != password {
+                client
+                    .send_numeric_reply(
+                        NumericReply::ErrBadChannelKey,
+                        format!("{} :Cannot join channel (+k)", name).to_string(),
                     )
                     .await;
                 return false;

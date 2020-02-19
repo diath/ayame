@@ -421,8 +421,7 @@ impl Client {
     }
 
     async fn on_join(&self, message: Message) {
-        /* TODO(diath): ERR_INVITEONLYCHAN, ERR_CHANNELISFULL, ERR_TOOMANYTARGETS, ERR_BANNEDFROMCHAN, ERR_BADCHANNELKEY, ERR_BADCHANMASK, ERR_TOOMANYCHANNELS, ERR_UNAVAILRESOURCE */
-        /* TODO(diath): Channel keys */
+        /* TODO(diath): ERR_INVITEONLYCHAN, ERR_TOOMANYTARGETS, ERR_BANNEDFROMCHAN, ERR_BADCHANMASK, ERR_TOOMANYCHANNELS, ERR_UNAVAILRESOURCE */
         if !*self.registered.lock().await {
             return;
         }
@@ -435,7 +434,12 @@ impl Client {
             self.channels.lock().await.clear();
         } else {
             let targets = message.params[0].split(",");
-            for target in targets {
+            let mut passwords = vec![];
+            if message.params.len() > 1 {
+                passwords = message.params[1].split(",").collect();
+            }
+
+            for (index, target) in targets.enumerate() {
                 if target.len() == 0 {
                     continue;
                 }
@@ -444,7 +448,12 @@ impl Client {
                     self.server.create_channel(target).await;
                 }
 
-                if self.server.join_channel(target, self).await {
+                let password = if let Some(password) = passwords.get(index) {
+                    password.to_string()
+                } else {
+                    "".to_string()
+                };
+                if self.server.join_channel(target, password, self).await {
                     self.channels.lock().await.insert(target.to_string());
 
                     // NOTE(diath): This cannot be handled in Server::join_channel method or we will end up with a deadlock.
