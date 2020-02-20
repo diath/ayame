@@ -32,6 +32,7 @@ pub enum NumericReply {
     ErrNicknameInUse = 433,
     ErrUserNotInChannel = 441,
     ErrNotOnChannel = 442,
+    ErrUserOnChannel = 443,
     ErrSummonDisabled = 445,
     ErrNeedMoreParams = 461,
     ErrAlreadyRegistered = 462,
