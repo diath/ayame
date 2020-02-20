@@ -630,7 +630,7 @@ impl Client {
         if !self.server.is_nick_mapped(&user).await {
             self.send_numeric_reply(
                 NumericReply::ErrNoSuchNick,
-                format!("{} :No such nick/channel", target).to_string(),
+                format!("{} :No such nick/channel", user).to_string(),
             )
             .await;
             return;
