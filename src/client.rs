@@ -636,6 +636,15 @@ impl Client {
             return;
         }
 
+        if self.server.has_channel_participant(&target, &user).await {
+            self.send_numeric_reply(
+                NumericReply::ErrUserOnChannel,
+                format!("{} {} :is already on channel", user, target),
+            )
+            .await;
+            return;
+        }
+
         self.server.invite_channel(&target, &user).await;
         self.server.broadcast_invite(self, &target, &user).await;
 
