@@ -13,6 +13,7 @@ pub struct ChannelTopic {
 }
 
 pub struct ChannelModes {
+    pub invite_only: bool,
     pub password: String,
     pub limit: usize,
     pub no_external_messages: bool,
@@ -21,9 +22,10 @@ pub struct ChannelModes {
 
 pub struct Channel {
     pub name: String,
-    pub participants: Mutex<HashSet<String>>,
     pub topic: Mutex<Arc<ChannelTopic>>,
     pub modes: ChannelModes,
+    pub participants: Mutex<HashSet<String>>,
+    pub invites: Mutex<HashSet<String>>,
 }
 
 impl Channel {
@@ -33,18 +35,24 @@ impl Channel {
             topic: Mutex::new(Arc::new(ChannelTopic {
                 ..Default::default()
             })),
-            participants: Mutex::new(HashSet::new()),
             modes: ChannelModes {
+                invite_only: false,
                 password: "".to_string(),
                 limit: 0,
                 no_external_messages: true,
                 secret: false,
             },
+            participants: Mutex::new(HashSet::new()),
+            invites: Mutex::new(HashSet::new()),
         }
     }
 
     pub async fn has_participant(&self, name: &str) -> bool {
         self.participants.lock().await.contains(name)
+    }
+
+    pub async fn is_invited(&self, name: &str) -> bool {
+        self.invites.lock().await.contains(name)
     }
 
     pub async fn part(&self, name: String) -> bool {
@@ -75,6 +83,10 @@ impl Channel {
 
     pub fn get_modes_description(&self) -> String {
         let mut desc = "[+".to_string();
+
+        if self.modes.invite_only {
+            write!(desc, "i").expect("");
+        }
 
         if self.modes.password.len() != 0 {
             write!(desc, "k").expect("");
