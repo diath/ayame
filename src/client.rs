@@ -717,9 +717,13 @@ impl Client {
                     continue;
                 }
 
-                self.server
+                if self
+                    .server
                     .kick_channel(target, &nick, user, message.clone())
-                    .await;
+                    .await
+                {
+                    self.channels.lock().await.remove(&nick);
+                }
             }
         } else if targets.len() == users.len() {
             for (index, target) in targets.iter().enumerate() {
@@ -751,9 +755,13 @@ impl Client {
                     continue;
                 }
 
-                self.server
+                if self
+                    .server
                     .kick_channel(target, &nick, user, message.clone())
-                    .await;
+                    .await
+                {
+                    self.channels.lock().await.remove(&nick);
+                }
             }
         }
     }
