@@ -20,6 +20,7 @@ use ircmsgprs::parser::{Message, Parser};
 pub struct Client {
     pub nick: Mutex<String>,
     pub user: Mutex<String>,
+    pub host: Mutex<String>,
     pub real_name: Mutex<String>,
     pub password: Mutex<String>,
     pub registered: Mutex<bool>,
@@ -36,6 +37,7 @@ impl Client {
         Client {
             nick: Mutex::new(String::new()),
             user: Mutex::new(String::new()),
+            host: Mutex::new(address.ip().to_string()),
             real_name: Mutex::new(String::new()),
             password: Mutex::new(String::new()),
             registered: Mutex::new(false),
@@ -53,7 +55,7 @@ impl Client {
             "{}!{}@{}",
             self.nick.lock().await,
             self.user.lock().await,
-            self.address
+            self.host.lock().await
         );
     }
 
