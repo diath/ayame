@@ -633,6 +633,7 @@ impl Client {
                 format!("{} :No such nick/channel", target).to_string(),
             )
             .await;
+            return;
         }
 
         self.server.invite_channel(&target, &user).await;
