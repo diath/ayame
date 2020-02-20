@@ -8,6 +8,7 @@ pub enum NumericReply {
     RplNoTopic = 331,
     RplTopic = 332,
     RplTopicSet = 333,
+    RplInviting = 341,
     RplVersion = 351,
     RplNamReply = 353,
     RplEndOfNames = 366,
@@ -36,6 +37,7 @@ pub enum NumericReply {
     ErrAlreadyRegistered = 462,
     ErrPasswordMismatch = 464,
     ErrChannelIsFull = 471,
+    ErrInviteOnlyChan = 473,
     ErrBadChannelKey = 475,
     ErrNoPrivileges = 481,
 }

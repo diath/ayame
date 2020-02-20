@@ -195,6 +195,9 @@ impl Client {
             "LIST" => {
                 self.on_list(message).await;
             }
+            "INVITE" => {
+                self.on_invite(message).await;
+            }
             "KICK" => {
                 self.on_kick(message).await;
             }
@@ -589,6 +592,58 @@ impl Client {
         } else {
             self.server.send_list(self, None).await;
         }
+    }
+
+    async fn on_invite(&self, message: Message) {
+        // TODO(diath): ERR_CHANOPRIVSNEEDED, RPL_AWAY.
+        if message.params.len() < 2 {
+            self.send_numeric_reply(
+                NumericReply::ErrNeedMoreParams,
+                "INVITE :Not enough parameters".to_string(),
+            )
+            .await;
+            return;
+        }
+
+        let nick = self.nick.lock().await.to_string();
+        let user = message.params[0].clone();
+        let target = message.params[1].clone();
+
+        if !self.server.is_channel_mapped(&target).await {
+            self.send_numeric_reply(
+                NumericReply::ErrNoSuchChannel,
+                format!("{} :No such channel", target).to_string(),
+            )
+            .await;
+            return;
+        }
+
+        if !self.server.has_channel_participant(&target, &nick).await {
+            self.send_numeric_reply(
+                NumericReply::ErrNotOnChannel,
+                format!("{} :You're not on that channel", target).to_string(),
+            )
+            .await;
+            return;
+        }
+
+        if !self.server.is_nick_mapped(&user).await {
+            self.send_numeric_reply(
+                NumericReply::ErrNoSuchNick,
+                format!("{} :No such nick/channel", target).to_string(),
+            )
+            .await;
+            return;
+        }
+
+        self.server.invite_channel(&target, &user).await;
+        self.server.broadcast_invite(self, &target, &user).await;
+
+        self.send_numeric_reply(
+            NumericReply::RplInviting,
+            format!("{} {}", user, target).to_string(),
+        )
+        .await;
     }
 
     async fn on_kick(&self, message: Message) {

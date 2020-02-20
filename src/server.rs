@@ -214,27 +214,39 @@ impl Server {
                 return false;
             }
 
-            if !oper
-                && channel.modes.limit != 0
-                && channel.participants.lock().await.len() >= channel.modes.limit
-            {
-                client
-                    .send_numeric_reply(
-                        NumericReply::ErrChannelIsFull,
-                        format!("{} :Cannot join channel (+l)", name).to_string(),
-                    )
-                    .await;
-                return false;
-            }
+            // NOTE(diath): Operators are exempt from join limits.
+            if !oper {
+                if channel.modes.limit != 0
+                    && channel.participants.lock().await.len() >= channel.modes.limit
+                {
+                    client
+                        .send_numeric_reply(
+                            NumericReply::ErrChannelIsFull,
+                            format!("{} :Cannot join channel (+l)", name).to_string(),
+                        )
+                        .await;
+                    return false;
+                }
 
-            if !oper && channel.modes.password.len() != 0 && channel.modes.password != password {
-                client
-                    .send_numeric_reply(
-                        NumericReply::ErrBadChannelKey,
-                        format!("{} :Cannot join channel (+k)", name).to_string(),
-                    )
-                    .await;
-                return false;
+                if channel.modes.password.len() != 0 && channel.modes.password != password {
+                    client
+                        .send_numeric_reply(
+                            NumericReply::ErrBadChannelKey,
+                            format!("{} :Cannot join channel (+k)", name).to_string(),
+                        )
+                        .await;
+                    return false;
+                }
+
+                if channel.modes.invite_only && !channel.is_invited(&nick).await {
+                    client
+                        .send_numeric_reply(
+                            NumericReply::ErrInviteOnlyChan,
+                            format!("{} :Cannot join channel (+i)", name).to_string(),
+                        )
+                        .await;
+                    return false;
+                }
             }
 
             channel.participants.lock().await.insert(nick.clone());
@@ -309,6 +321,17 @@ impl Server {
         }
 
         false
+    }
+
+    pub async fn invite_channel(&self, name: &str, user: &str) {
+        if let Some(channel) = self
+            .channels
+            .lock()
+            .await
+            .get(name.to_string().to_lowercase().as_str())
+        {
+            channel.invites.lock().await.insert(user.to_string());
+        }
     }
 
     pub async fn kick_channel(
@@ -577,6 +600,32 @@ impl Server {
         for target in targets {
             if let Some(client) = self.clients.lock().await.get(&target) {
                 client.send_raw(message.clone()).await;
+            }
+        }
+    }
+
+    pub async fn broadcast_invite(&self, client: &Client, channel_name: &str, user: &str) {
+        if let Some(channel) = self.channels.lock().await.get(channel_name) {
+            let nick = client.nick.lock().await.to_string();
+            let message = format!(
+                ":{} NOTICE @{} :{} invited {} into the channel.",
+                self.name, channel_name, nick, user
+            );
+            for target in &*channel.participants.lock().await {
+                if let Some(client) = self.clients.lock().await.get(target) {
+                    client.send_raw(message.clone()).await;
+                }
+            }
+
+            if let Some(invited) = self.clients.lock().await.get(user) {
+                invited
+                    .send_raw(format!(
+                        ":{} INVITE {} :{}",
+                        client.get_prefix().await,
+                        nick,
+                        channel_name
+                    ))
+                    .await;
             }
         }
     }
