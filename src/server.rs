@@ -356,9 +356,9 @@ impl Server {
             }
 
             channel.remove(kicked.to_string()).await;
-
             return true;
         }
+
         false
     }
 
