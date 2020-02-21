@@ -1,3 +1,6 @@
+use crate::client::Client;
+use crate::replies::NumericReply;
+
 use std::collections::HashSet;
 use std::fmt::Write;
 use std::sync::Arc;
@@ -23,7 +26,7 @@ pub struct ChannelModes {
 pub struct Channel {
     pub name: String,
     pub topic: Mutex<Arc<ChannelTopic>>,
-    pub modes: ChannelModes,
+    pub modes: Mutex<ChannelModes>,
     pub participants: Mutex<HashSet<String>>,
     pub invites: Mutex<HashSet<String>>,
 }
@@ -35,13 +38,13 @@ impl Channel {
             topic: Mutex::new(Arc::new(ChannelTopic {
                 ..Default::default()
             })),
-            modes: ChannelModes {
+            modes: Mutex::new(ChannelModes {
                 invite_only: false,
                 password: "".to_string(),
                 limit: 0,
                 no_external_messages: true,
                 secret: false,
-            },
+            }),
             participants: Mutex::new(HashSet::new()),
             invites: Mutex::new(HashSet::new()),
         }
@@ -81,30 +84,118 @@ impl Channel {
         }
     }
 
-    pub fn get_modes_description(&self) -> String {
-        let mut desc = "[+".to_string();
+    pub async fn get_modes_description(&self, with_params: bool) -> String {
+        let mut desc = "+".to_string();
+        let modes = self.modes.lock().await;
 
-        if self.modes.invite_only {
+        if modes.invite_only {
             write!(desc, "i").expect("");
         }
 
-        if self.modes.password.len() != 0 {
+        if modes.password.len() != 0 {
             write!(desc, "k").expect("");
         }
 
-        if self.modes.limit != 0 {
+        if modes.limit != 0 {
             write!(desc, "l").expect("");
         }
 
-        if self.modes.no_external_messages {
+        if modes.no_external_messages {
             write!(desc, "n").expect("");
         }
 
-        if self.modes.secret {
+        if modes.secret {
             write!(desc, "s").expect("");
         }
 
-        write!(desc, "]").expect("");
+        if with_params {
+            let mut params = vec![];
+            if modes.password.len() != 0 {
+                params.push(modes.password.clone());
+            }
+
+            if modes.limit != 0 {
+                params.push(modes.limit.to_string());
+            }
+
+            write!(desc, " {}", params.join(" ")).expect("");
+        }
+
         desc
+    }
+
+    pub async fn toggle_modes(&self, client: &Client, params: Vec<String>) {
+        if params.len() < 1 {
+            panic!("toggle_modes()");
+        }
+
+        let mut flag = false;
+        for ch in params[0].chars() {
+            match ch {
+                '+' => flag = true,
+                '-' => flag = false,
+                'i' => {
+                    self.modes.lock().await.invite_only = flag;
+                }
+                'k' => {
+                    if flag {
+                        if params.len() > 1 {
+                            if self.modes.lock().await.password.to_string().len() > 0 {
+                                client
+                                    .send_numeric_reply(
+                                        NumericReply::ErrKeySet,
+                                        format!("{} :Channel key already set", self.name),
+                                    )
+                                    .await;
+                            } else {
+                                self.modes.lock().await.password = params[1].clone();
+                            }
+                        } else {
+                            client
+                                .send_numeric_reply(
+                                    NumericReply::ErrNeedMoreParams,
+                                    "MODE :Not enough parameters".to_string(),
+                                )
+                                .await;
+                        }
+                    } else {
+                        self.modes.lock().await.password.clear();
+                    }
+                }
+                'l' => {
+                    if flag {
+                        if params.len() > 1 {
+                            match params[1].parse::<usize>() {
+                                Ok(limit) => self.modes.lock().await.limit = limit,
+                                Err(_) => self.modes.lock().await.limit = 0,
+                            }
+                        } else {
+                            client
+                                .send_numeric_reply(
+                                    NumericReply::ErrNeedMoreParams,
+                                    "MODE :Not enough parameters".to_string(),
+                                )
+                                .await;
+                        }
+                    } else {
+                        self.modes.lock().await.limit = 0;
+                    }
+                }
+                'n' => {
+                    self.modes.lock().await.no_external_messages = flag;
+                }
+                's' => {
+                    self.modes.lock().await.secret = flag;
+                }
+                _ => {
+                    client
+                        .send_numeric_reply(
+                            NumericReply::ErrUnknownMode,
+                            format!("{} :Unknown mode", ch),
+                        )
+                        .await;
+                }
+            }
+        }
     }
 }

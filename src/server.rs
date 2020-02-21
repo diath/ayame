@@ -121,7 +121,7 @@ impl Server {
             .iter()
             .position(|c| Arc::into_raw(c.clone()) == &*client);
         if index.is_none() {
-            panic!("map nick");
+            panic!("map_nick()");
         }
         let c = self.clients_pending.lock().await.remove(index.unwrap());
         self.clients.lock().await.insert(nick, c);
@@ -216,9 +216,8 @@ impl Server {
 
             // NOTE(diath): Operators are exempt from join limits.
             if !oper {
-                if channel.modes.limit != 0
-                    && channel.participants.lock().await.len() >= channel.modes.limit
-                {
+                let modes = channel.modes.lock().await;
+                if modes.limit != 0 && channel.participants.lock().await.len() >= modes.limit {
                     client
                         .send_numeric_reply(
                             NumericReply::ErrChannelIsFull,
@@ -228,7 +227,7 @@ impl Server {
                     return false;
                 }
 
-                if channel.modes.password.len() != 0 && channel.modes.password != password {
+                if modes.password.len() != 0 && modes.password != password {
                     client
                         .send_numeric_reply(
                             NumericReply::ErrBadChannelKey,
@@ -238,7 +237,7 @@ impl Server {
                     return false;
                 }
 
-                if channel.modes.invite_only && !channel.is_invited(&nick).await {
+                if modes.invite_only && !channel.is_invited(&nick).await {
                     client
                         .send_numeric_reply(
                             NumericReply::ErrInviteOnlyChan,
@@ -375,7 +374,9 @@ impl Server {
 
             // NOTE(diath): Operators can always send messages to any channel.
             if !*client.operator.lock().await {
-                if !channel.has_participant(&nick).await && channel.modes.no_external_messages {
+                if !channel.has_participant(&nick).await
+                    && channel.modes.lock().await.no_external_messages
+                {
                     client
                         .send_numeric_reply(
                             NumericReply::ErrCannotSendToChan,
@@ -508,7 +509,7 @@ impl Server {
                     let topic = channel.topic.lock().await;
                     let participants = channel.participants.lock().await;
 
-                    if channel.modes.secret && !oper && !participants.contains(&nick) {
+                    if channel.modes.lock().await.secret && !oper && !participants.contains(&nick) {
                         continue;
                     }
 
@@ -516,10 +517,10 @@ impl Server {
                         .send_numeric_reply(
                             NumericReply::RplList,
                             format!(
-                                "{} {} :{} {}",
+                                "{} {} :[{}] {}",
                                 channel.name,
                                 participants.len(),
-                                channel.get_modes_description(),
+                                channel.get_modes_description(oper).await,
                                 topic.text.lock().await
                             ),
                         )
@@ -533,7 +534,7 @@ impl Server {
                 let topic = channel.topic.lock().await;
                 let participants = channel.participants.lock().await;
 
-                if channel.modes.secret && !oper && !participants.contains(&nick) {
+                if channel.modes.lock().await.secret && !oper && !participants.contains(&nick) {
                     continue;
                 }
 
@@ -544,7 +545,7 @@ impl Server {
                             "{} {} :{} {}",
                             channel.name,
                             participants.len(),
-                            channel.get_modes_description(),
+                            channel.get_modes_description(oper).await,
                             topic.text.lock().await
                         ),
                     )
@@ -627,6 +628,94 @@ impl Server {
                     ))
                     .await;
             }
+        }
+    }
+
+    pub async fn handle_channel_mode(
+        &self,
+        client: &Client,
+        channel_name: &str,
+        params: Vec<String>,
+    ) {
+        // TODO(diath): ERR_CHANOPRIVSNEEDED.
+        if let Some(channel) = self.channels.lock().await.get(channel_name) {
+            let nick = client.nick.lock().await.to_string();
+            let oper = *client.operator.lock().await;
+            let has_participant = channel.has_participant(&nick).await;
+
+            if params.len() < 1 {
+                if !oper {
+                    if channel.modes.lock().await.secret && !has_participant {
+                        client
+                            .send_numeric_reply(
+                                NumericReply::ErrNoSuchChannel,
+                                format!("{} :No such channel", channel_name).to_string(),
+                            )
+                            .await;
+                        return;
+                    }
+                }
+
+                client
+                    .send_numeric_reply(
+                        NumericReply::RplChannelModeIs,
+                        format!(
+                            "{} {}",
+                            channel_name,
+                            channel.get_modes_description(oper || has_participant).await
+                        ),
+                    )
+                    .await;
+            } else {
+                if oper || has_participant {
+                    channel.toggle_modes(client, params).await;
+                } else {
+                    client
+                        .send_numeric_reply(
+                            NumericReply::ErrUserNotInChannel,
+                            format!("{} {} :They aren't on that channel", nick, channel_name)
+                                .to_string(),
+                        )
+                        .await;
+                }
+            }
+        } else {
+            client
+                .send_numeric_reply(
+                    NumericReply::ErrNoSuchChannel,
+                    format!("{} :No such channel", channel_name).to_string(),
+                )
+                .await;
+        }
+    }
+
+    pub async fn handle_user_mode(&self, client: &Client, target_nick: &str, params: Vec<String>) {
+        if self.is_nick_mapped(&target_nick).await {
+            let nick = client.nick.lock().await.to_string();
+            if &nick == target_nick {
+                if params.len() > 0 {
+                    /* TODO(diath): Set user mode. */
+                } else {
+                    /* TODO(diath): Send user mode. */
+                    client
+                        .send_numeric_reply(NumericReply::RplUModeIs, "".to_string())
+                        .await;
+                }
+            } else {
+                client
+                    .send_numeric_reply(
+                        NumericReply::ErrUsersDontMatch,
+                        ":Cant change mode for other users".to_string(),
+                    )
+                    .await;
+            }
+        } else {
+            client
+                .send_numeric_reply(
+                    NumericReply::ErrNoSuchNick,
+                    format!("{} :No such nick/channel", target_nick).to_string(),
+                )
+                .await;
         }
     }
 }

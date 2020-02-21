@@ -238,6 +238,10 @@ impl Client {
                     .await;
                 }
             }
+            /* Other */
+            "MODE" => {
+                self.on_mode(message).await;
+            }
             _ => {
                 if *self.registered.lock().await {
                     self.send_numeric_reply(
@@ -915,5 +919,38 @@ impl Client {
         )
         .await;
         self.server.reload_motd().await;
+    }
+
+    async fn on_mode(&self, message: Message) {
+        if message.params.len() < 1 {
+            self.send_numeric_reply(
+                NumericReply::ErrNeedMoreParams,
+                "MODE :Not enough parameters".to_string(),
+            )
+            .await;
+            return;
+        }
+
+        let target = message.params[0].clone();
+        match &target[0..1] {
+            "#" => {
+                self.server
+                    .handle_channel_mode(self, &target, message.params[1..].to_vec())
+                    .await;
+            }
+            //* NOTE(diath): Technically a channel can be prefixed with either # (network), ! (safe), + (unmoderated) or & (local) but we only support #. */
+            "!" | "&" | "+" => {
+                self.send_numeric_reply(
+                    NumericReply::ErrNoSuchChannel,
+                    format!("{} :No such channel", target).to_string(),
+                )
+                .await;
+            }
+            _ => {
+                self.server
+                    .handle_user_mode(self, &target, message.params[1..].to_vec())
+                    .await;
+            }
+        }
     }
 }
