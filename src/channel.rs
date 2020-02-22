@@ -3,16 +3,15 @@ use crate::replies::NumericReply;
 
 use std::collections::HashSet;
 use std::fmt::Write;
-use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use tokio::sync::Mutex;
 
 #[derive(Default)]
 pub struct ChannelTopic {
-    pub text: Mutex<String>,
-    pub set_by: Mutex<String>,
-    pub set_at: Mutex<u64>,
+    pub text: String,
+    pub set_by: String,
+    pub set_at: u64,
 }
 
 pub struct ChannelModes {
@@ -25,7 +24,7 @@ pub struct ChannelModes {
 
 pub struct Channel {
     pub name: String,
-    pub topic: Mutex<Arc<ChannelTopic>>,
+    pub topic: Mutex<ChannelTopic>,
     pub modes: Mutex<ChannelModes>,
     pub participants: Mutex<HashSet<String>>,
     pub invites: Mutex<HashSet<String>>,
@@ -35,9 +34,9 @@ impl Channel {
     pub fn new(name: String) -> Channel {
         Channel {
             name: name,
-            topic: Mutex::new(Arc::new(ChannelTopic {
+            topic: Mutex::new(ChannelTopic {
                 ..Default::default()
-            })),
+            }),
             modes: Mutex::new(ChannelModes {
                 invite_only: false,
                 password: "".to_string(),
@@ -73,14 +72,14 @@ impl Channel {
     }
 
     pub async fn set_topic(&self, sender: String, text: String) {
-        let topic = self.topic.lock().await;
-        (*topic.text.lock().await) = text;
-        (*topic.set_by.lock().await) = sender;
+        let mut topic = self.topic.lock().await;
+        topic.text = text;
+        topic.set_by = sender;
 
         let now = SystemTime::now();
         match now.duration_since(UNIX_EPOCH) {
-            Ok(duration) => (*topic.set_at.lock().await) = duration.as_secs(),
-            Err(_) => (*topic.set_at.lock().await) = 0,
+            Ok(duration) => topic.set_at = duration.as_secs(),
+            Err(_) => topic.set_at = 0,
         }
     }
 

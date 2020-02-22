@@ -483,43 +483,9 @@ impl Client {
             )
             .await;
         } else if message.params.len() < 2 {
-            let channel = message.params[0].clone();
-            if self
-                .server
-                .is_channel_mapped(channel.clone().as_str())
-                .await
-            {
-                if let Some(topic) = self.server.get_channel_topic(&channel).await {
-                    let text = topic.text.lock().await;
-                    if text.len() == 0 {
-                        self.send_numeric_reply(
-                            NumericReply::RplNoTopic,
-                            format!("{} :No topic is set", channel).to_string(),
-                        )
-                        .await;
-                    } else {
-                        self.send_numeric_reply(
-                            NumericReply::RplTopic,
-                            format!("{} :{}", channel, text).to_string(),
-                        )
-                        .await;
-
-                        let set_by = topic.set_by.lock().await;
-                        let set_at = topic.set_at.lock().await;
-                        self.send_numeric_reply(
-                            NumericReply::RplTopicSet,
-                            format!("{} {} {}", channel, set_by, set_at).to_string(),
-                        )
-                        .await;
-                    }
-                }
-            } else {
-                self.send_numeric_reply(
-                    NumericReply::ErrNoSuchChannel,
-                    format!("{} :No such channel", channel).to_string(),
-                )
+            self.server
+                .get_channel_topic(self, &message.params[0])
                 .await;
-            }
         } else {
             let channel = message.params[0].clone();
             let nick = self.nick.lock().await.to_string();
