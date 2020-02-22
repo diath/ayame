@@ -328,7 +328,10 @@ impl Server {
         }
 
         if remove {
-            self.channels.lock().await.remove(name);
+            self.channels
+                .lock()
+                .await
+                .remove(name.to_string().to_lowercase().as_str());
         }
 
         result
