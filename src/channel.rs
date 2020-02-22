@@ -129,8 +129,13 @@ impl Channel {
             panic!("toggle_modes()");
         }
 
+        let chars = params[0].chars();
+        let params = params[1..].to_vec();
+
         let mut flag = false;
-        for ch in params[0].chars() {
+        let mut index: usize = 0;
+
+        for ch in chars {
             match ch {
                 '+' => flag = true,
                 '-' => flag = false,
@@ -139,7 +144,7 @@ impl Channel {
                 }
                 'k' => {
                     if flag {
-                        if params.len() > 1 {
+                        if let Some(param) = params.get(index) {
                             if self.modes.lock().await.password.to_string().len() > 0 {
                                 client
                                     .send_numeric_reply(
@@ -148,7 +153,7 @@ impl Channel {
                                     )
                                     .await;
                             } else {
-                                self.modes.lock().await.password = params[1].clone();
+                                self.modes.lock().await.password = param.to_string();
                             }
                         } else {
                             client
@@ -161,11 +166,12 @@ impl Channel {
                     } else {
                         self.modes.lock().await.password.clear();
                     }
+                    index += 1;
                 }
                 'l' => {
                     if flag {
-                        if params.len() > 1 {
-                            match params[1].parse::<usize>() {
+                        if let Some(param) = params.get(index) {
+                            match param.to_string().parse::<usize>() {
                                 Ok(limit) => self.modes.lock().await.limit = limit,
                                 Err(_) => self.modes.lock().await.limit = 0,
                             }
@@ -180,6 +186,7 @@ impl Channel {
                     } else {
                         self.modes.lock().await.limit = 0;
                     }
+                    index += 1;
                 }
                 'n' => {
                     self.modes.lock().await.no_external_messages = flag;
