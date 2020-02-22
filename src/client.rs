@@ -378,7 +378,7 @@ impl Client {
     }
 
     async fn on_join(&self, message: Message) {
-        /* TODO(diath): ERR_INVITEONLYCHAN, ERR_TOOMANYTARGETS, ERR_BANNEDFROMCHAN, ERR_BADCHANMASK, ERR_TOOMANYCHANNELS, ERR_UNAVAILRESOURCE */
+        /* TODO(diath): ERR_TOOMANYTARGETS, ERR_BANNEDFROMCHAN, ERR_BADCHANMASK, ERR_TOOMANYCHANNELS, ERR_UNAVAILRESOURCE */
         if !*self.registered.lock().await {
             return;
         }
