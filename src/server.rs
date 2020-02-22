@@ -296,6 +296,9 @@ impl Server {
 
     pub async fn part_channel(&self, name: &str, nick: &str, part_message: &str) -> bool {
         /* TODO(diath): This should broadcast user prefix and not nick. */
+        let mut result = false;
+        let mut remove = false;
+
         if let Some(channel) = self
             .channels
             .lock()
@@ -316,11 +319,19 @@ impl Server {
                     client.send_raw(message.clone()).await;
                 }
 
-                return true;
+                if channel.participants.lock().await.len() == 0 {
+                    remove = true;
+                }
+
+                result = true;
             }
         }
 
-        false
+        if remove {
+            self.channels.lock().await.remove(name);
+        }
+
+        result
     }
 
     pub async fn invite_channel(&self, name: &str, user: &str) {
@@ -342,6 +353,9 @@ impl Server {
         kick_message: String,
     ) -> bool {
         /* TODO(diath): This should broadcast user prefix and not nick. */
+        let mut result = false;
+        let mut remove = false;
+
         if let Some(channel) = self
             .channels
             .lock()
@@ -356,10 +370,21 @@ impl Server {
             }
 
             channel.remove(kicked.to_string()).await;
-            return true;
+            if channel.participants.lock().await.len() == 0 {
+                remove = true;
+            }
+
+            result = true;
         }
 
-        false
+        if remove {
+            self.channels
+                .lock()
+                .await
+                .remove(name.to_string().to_lowercase().as_str());
+        }
+
+        result
     }
 
     pub async fn forward_channel_message(&self, client: &Client, name: &str, message: String) {
