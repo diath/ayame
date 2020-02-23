@@ -161,96 +161,123 @@ impl Client {
 
     async fn on_message(&self, message: Message) {
         println!("Received message: {}", message);
-        match message.command.as_str() {
-            /* Connection Registration */
-            "CAP" => {
-                self.on_cap(message);
-            }
-            "PASS" => {
-                self.on_pass(message).await;
-            }
-            "NICK" => {
-                self.on_nick(message).await;
-            }
-            "USER" => {
-                self.on_user(message).await;
-            }
-            "OPER" => {
-                self.on_oper(message).await;
-            }
-            "QUIT" => {
-                self.on_quit(message).await;
-            }
-            /* Channel Operations */
-            "JOIN" => {
-                self.on_join(message).await;
-            }
-            "PART" => {
-                self.on_part(message).await;
-            }
-            "TOPIC" => {
-                self.on_topic(message).await;
-            }
-            "NAMES" => {
-                self.on_names(message).await;
-            }
-            "LIST" => {
-                self.on_list(message).await;
-            }
-            "INVITE" => {
-                self.on_invite(message).await;
-            }
-            "KICK" => {
-                self.on_kick(message).await;
-            }
-            /* Sending Messages */
-            "PRIVMSG" => {
-                self.on_privmsg(message).await;
-            }
-            /* Server Queries and Commands */
-            "MOTD" => {
-                self.on_motd(message).await;
-            }
-            "VERSION" => {
-                self.on_version(message).await;
-            }
-            "TIME" => {
-                self.on_time(message).await;
-            }
-            "REHASH" => {
-                self.on_rehash().await;
-            }
-            "DIE" | "RESTART" => {
-                if *self.registered.lock().await {
+
+        let registered = *self.registered.lock().await;
+        if !registered {
+            match message.command.as_str() {
+                /* Connection Registration */
+                "CAP" => {
+                    self.on_cap(message);
+                }
+                "PASS" => {
+                    self.on_pass(message).await;
+                }
+                "NICK" => {
+                    self.on_nick(message).await;
+                }
+                "USER" => {
+                    self.on_user(message).await;
+                }
+                _ => {
                     self.send_numeric_reply(
-                        NumericReply::ErrNoPrivileges,
-                        ":Permission Denied- You're not an IRC operator".to_string(),
+                        NumericReply::ErrNotRegistered,
+                        ":You have not registered".to_string(),
                     )
                     .await;
                 }
             }
-            "SUMMON" => {
-                if *self.registered.lock().await {
-                    self.send_numeric_reply(
-                        NumericReply::ErrSummonDisabled,
-                        ":SUMMON has been disabled".to_string(),
-                    )
-                    .await;
+        } else {
+            match message.command.as_str() {
+                /* Connection Registration */
+                "CAP" => {
+                    self.on_cap(message);
                 }
-            }
-            /* Other */
-            "MODE" => {
-                self.on_mode(message).await;
-            }
-            _ => {
-                if *self.registered.lock().await {
-                    self.send_numeric_reply(
-                        NumericReply::ErrUnknownCommand,
-                        format!("{} :Unknown command", message.command),
-                    )
-                    .await;
+                "PASS" => {
+                    self.on_pass(message).await;
                 }
-                println!("Command {} not implemented.", message.command);
+                "NICK" => {
+                    self.on_nick(message).await;
+                }
+                "USER" => {
+                    self.on_user(message).await;
+                }
+                "OPER" => {
+                    self.on_oper(message).await;
+                }
+                "QUIT" => {
+                    self.on_quit(message).await;
+                }
+                /* Channel Operations */
+                "JOIN" => {
+                    self.on_join(message).await;
+                }
+                "PART" => {
+                    self.on_part(message).await;
+                }
+                "TOPIC" => {
+                    self.on_topic(message).await;
+                }
+                "NAMES" => {
+                    self.on_names(message).await;
+                }
+                "LIST" => {
+                    self.on_list(message).await;
+                }
+                "INVITE" => {
+                    self.on_invite(message).await;
+                }
+                "KICK" => {
+                    self.on_kick(message).await;
+                }
+                /* Sending Messages */
+                "PRIVMSG" => {
+                    self.on_privmsg(message).await;
+                }
+                /* Server Queries and Commands */
+                "MOTD" => {
+                    self.on_motd(message).await;
+                }
+                "VERSION" => {
+                    self.on_version(message).await;
+                }
+                "TIME" => {
+                    self.on_time(message).await;
+                }
+                "REHASH" => {
+                    self.on_rehash().await;
+                }
+                "DIE" | "RESTART" => {
+                    if *self.registered.lock().await {
+                        self.send_numeric_reply(
+                            NumericReply::ErrNoPrivileges,
+                            ":Permission Denied- You're not an IRC operator".to_string(),
+                        )
+                        .await;
+                    }
+                }
+                "SUMMON" => {
+                    if *self.registered.lock().await {
+                        self.send_numeric_reply(
+                            NumericReply::ErrSummonDisabled,
+                            ":SUMMON has been disabled".to_string(),
+                        )
+                        .await;
+                    }
+                }
+                /* Other */
+                "MODE" => {
+                    self.on_mode(message).await;
+                }
+                _ => {
+                    if *self.registered.lock().await {
+                        self.send_numeric_reply(
+                            NumericReply::ErrUnknownCommand,
+                            format!("{} :Unknown command", message.command),
+                        )
+                        .await;
+                    }
+                    println!("Command {} not implemented.", message.command);
+                }
             }
         }
     }
@@ -347,7 +374,7 @@ impl Client {
 
     async fn on_oper(&self, message: Message) {
         /* TODO(diath): ERR_NOOPERHOST */
-        if !*self.registered.lock().await || *self.operator.lock().await {
+        if *self.operator.lock().await {
             return;
         }
 
@@ -379,10 +406,6 @@ impl Client {
 
     async fn on_join(&self, message: Message) {
         /* TODO(diath): ERR_TOOMANYTARGETS, ERR_BANNEDFROMCHAN, ERR_BADCHANMASK, ERR_TOOMANYCHANNELS, ERR_UNAVAILRESOURCE */
-        if !*self.registered.lock().await {
-            return;
-        }
-
         if message.params[0] == "0" {
             let nick = self.nick.lock().await.to_string();
             for channel in &*self.channels.lock().await {
@@ -421,10 +444,6 @@ impl Client {
     }
 
     async fn on_part(&self, message: Message) {
-        if !*self.registered.lock().await {
-            return;
-        }
-
         if message.params.len() < 1 {
             self.send_numeric_reply(
                 NumericReply::ErrNeedMoreParams,
@@ -472,10 +491,6 @@ impl Client {
 
     async fn on_topic(&self, message: Message) {
         /* TODO(diath): ERR_CHANOPRIVSNEEDED, ERR_NOCHANMODES */
-        if !*self.registered.lock().await {
-            return;
-        }
-
         if message.params.len() < 1 {
             self.send_numeric_reply(
                 NumericReply::ErrNeedMoreParams,
@@ -506,10 +521,6 @@ impl Client {
 
     async fn on_names(&self, message: Message) {
         /* TODO(diath): ERR_TOOMANYMATCHES */
-        if !*self.registered.lock().await {
-            return;
-        }
-
         if message.params.len() > 1 {
             if message.params[1] != self.server.name {
                 self.send_numeric_reply(
@@ -629,10 +640,6 @@ impl Client {
 
     async fn on_kick(&self, message: Message) {
         /* TODO(diath): ERR_BADCHANMASK, ERR_CHANOPRIVSNEEDED */
-        if !*self.registered.lock().await {
-            return;
-        }
-
         if message.params.len() < 2 {
             self.send_numeric_reply(
                 NumericReply::ErrNeedMoreParams,
@@ -738,10 +745,6 @@ impl Client {
 
     async fn on_privmsg(&self, message: Message) {
         /* TODO(diath): ERR_NOTOPLEVEL, ERR_WILDTOPLEVEL, ERR_BADMASK */
-        if !*self.registered.lock().await {
-            return;
-        }
-
         if message.params.len() < 1 {
             self.send_numeric_reply(
                 NumericReply::ErrNoRecipient,
@@ -800,10 +803,6 @@ impl Client {
     }
 
     async fn on_motd(&self, _message: Message) {
-        if !*self.registered.lock().await {
-            return;
-        }
-
         /* TODO: add support for <target> */
         self.server.send_motd(&self).await;
     }
@@ -831,10 +830,6 @@ impl Client {
     }
 
     async fn on_time(&self, _message: Message) {
-        if !*self.registered.lock().await {
-            return;
-        }
-
         /* TODO: add support for <target> */
         self.send_numeric_reply(
             NumericReply::RplTime,
@@ -865,10 +860,6 @@ impl Client {
     }
 
     async fn on_rehash(&self) {
-        if !*self.registered.lock().await {
-            return;
-        }
-
         if !*self.operator.lock().await {
             self.send_numeric_reply(
                 NumericReply::ErrNoPrivileges,
