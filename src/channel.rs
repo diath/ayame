@@ -128,6 +128,8 @@ impl Channel {
             panic!("toggle_modes()");
         }
 
+        let mut modes = self.modes.lock().await;
+
         let chars = params[0].chars();
         let params = params[1..].to_vec();
 
@@ -148,8 +150,10 @@ impl Channel {
                     changes.push('-');
                 }
                 'i' => {
-                    self.modes.lock().await.invite_only = flag;
-                    changes.push('i');
+                    if modes.invite_only != flag {
+                        modes.invite_only = flag;
+                        changes.push('i');
+                    }
                 }
                 'k' => {
                     changes.push('k');
@@ -163,7 +167,8 @@ impl Channel {
                                     )
                                     .await;
                             } else {
-                                self.modes.lock().await.password = param.to_string();
+                                modes.password = param.to_string();
+                                changes.push('k');
                                 changes_params.push(param.to_string());
                             }
                         } else {
@@ -175,20 +180,24 @@ impl Channel {
                                 .await;
                         }
                     } else {
-                        self.modes.lock().await.password.clear();
+                        modes.password.clear();
+                        changes.push('k');
                     }
                     index += 1;
                 }
                 'l' => {
-                    changes.push('l');
                     if flag {
                         if let Some(param) = params.get(index) {
+                            let prev = modes.limit;
                             match param.to_string().parse::<usize>() {
-                                Ok(limit) => self.modes.lock().await.limit = limit,
-                                Err(_) => self.modes.lock().await.limit = 0,
+                                Ok(limit) => modes.limit = limit,
+                                Err(_) => modes.limit = 0,
                             }
 
-                            changes_params.push(self.modes.lock().await.limit.to_string());
+                            if prev != modes.limit {
+                                changes.push('l');
+                                changes_params.push(modes.limit.to_string());
+                            }
                         } else {
                             client
                                 .send_numeric_reply(
@@ -198,17 +207,22 @@ impl Channel {
                                 .await;
                         }
                     } else {
-                        self.modes.lock().await.limit = 0;
+                        modes.limit = 0;
+                        changes.push('l');
                     }
                     index += 1;
                 }
                 'n' => {
-                    self.modes.lock().await.no_external_messages = flag;
-                    changes.push('n');
+                    if modes.no_external_messages != flag {
+                        modes.no_external_messages = flag;
+                        changes.push('n');
+                    }
                 }
                 's' => {
-                    self.modes.lock().await.secret = flag;
-                    changes.push('s');
+                    if modes.secret != flag {
+                        modes.secret = flag;
+                        changes.push('s');
+                    }
                 }
                 _ => {
                     client
