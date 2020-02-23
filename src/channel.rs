@@ -123,7 +123,7 @@ impl Channel {
         desc
     }
 
-    pub async fn toggle_modes(&self, client: &Client, params: Vec<String>) {
+    pub async fn toggle_modes(&self, client: &Client, params: Vec<String>) -> String {
         if params.len() < 1 {
             panic!("toggle_modes()");
         }
@@ -134,14 +134,25 @@ impl Channel {
         let mut flag = false;
         let mut index: usize = 0;
 
+        let mut changes = String::new();
+        let mut changes_params = vec![];
+
         for ch in chars {
             match ch {
-                '+' => flag = true,
-                '-' => flag = false,
+                '+' => {
+                    flag = true;
+                    changes.push('+');
+                }
+                '-' => {
+                    flag = false;
+                    changes.push('-');
+                }
                 'i' => {
                     self.modes.lock().await.invite_only = flag;
+                    changes.push('i');
                 }
                 'k' => {
+                    changes.push('k');
                     if flag {
                         if let Some(param) = params.get(index) {
                             if self.modes.lock().await.password.to_string().len() > 0 {
@@ -153,6 +164,7 @@ impl Channel {
                                     .await;
                             } else {
                                 self.modes.lock().await.password = param.to_string();
+                                changes_params.push(param.to_string());
                             }
                         } else {
                             client
@@ -168,12 +180,15 @@ impl Channel {
                     index += 1;
                 }
                 'l' => {
+                    changes.push('l');
                     if flag {
                         if let Some(param) = params.get(index) {
                             match param.to_string().parse::<usize>() {
                                 Ok(limit) => self.modes.lock().await.limit = limit,
                                 Err(_) => self.modes.lock().await.limit = 0,
                             }
+
+                            changes_params.push(self.modes.lock().await.limit.to_string());
                         } else {
                             client
                                 .send_numeric_reply(
@@ -189,9 +204,11 @@ impl Channel {
                 }
                 'n' => {
                     self.modes.lock().await.no_external_messages = flag;
+                    changes.push('n');
                 }
                 's' => {
                     self.modes.lock().await.secret = flag;
+                    changes.push('s');
                 }
                 _ => {
                     client
@@ -203,5 +220,12 @@ impl Channel {
                 }
             }
         }
+
+        if changes.len() > 0 && changes_params.len() > 0 {
+            changes.push(' ');
+        }
+
+        changes.push_str(&changes_params.join(" "));
+        changes
     }
 }
