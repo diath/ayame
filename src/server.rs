@@ -636,7 +636,6 @@ impl Server {
     }
 
     pub async fn broadcast_quit(&self, client: &Client, reason: &str) {
-        let message = format!(":{} QUIT :{}", client.get_prefix().await, reason);
         let mut targets = HashSet::new();
 
         for channel_name in &*client.channels.lock().await {
@@ -647,6 +646,7 @@ impl Server {
             }
         }
 
+        let message = format!(":{} QUIT :{}", client.get_prefix().await, reason);
         for target in targets {
             if let Some(client) = self.clients.lock().await.get(&target) {
                 client.send_raw(message.clone()).await;
@@ -717,7 +717,26 @@ impl Server {
                     .await;
             } else {
                 if oper || has_participant {
-                    channel.toggle_modes(client, params).await;
+                    let changes = channel.toggle_modes(client, params).await;
+                    if changes.len() > 0 {
+                        let mut targets = HashSet::new();
+
+                        for target in &*channel.participants.lock().await {
+                            targets.insert(target.clone());
+                        }
+
+                        let message = format!(
+                            ":{} MODE {} {}",
+                            client.get_prefix().await,
+                            channel_name,
+                            changes
+                        );
+                        for target in targets {
+                            if let Some(client) = self.clients.lock().await.get(&target) {
+                                client.send_raw(message.clone()).await;
+                            }
+                        }
+                    }
                 } else {
                     client
                         .send_numeric_reply(
