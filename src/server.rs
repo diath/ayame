@@ -1,5 +1,5 @@
 use crate::ayame::*;
-use crate::channel::Channel;
+use crate::channel::{Channel, ChannelUserModes};
 use crate::client::Client;
 use crate::config::Config;
 use crate::replies::NumericReply;
@@ -214,10 +214,12 @@ impl Server {
                 return false;
             }
 
+            let mut participants = channel.participants.lock().await;
+
             // NOTE(diath): Operators are exempt from join limits.
             if !oper {
                 let modes = channel.modes.lock().await;
-                if modes.limit != 0 && channel.participants.lock().await.len() >= modes.limit {
+                if modes.limit != 0 && participants.len() >= modes.limit {
                     client
                         .send_numeric_reply(
                             NumericReply::ErrChannelIsFull,
@@ -248,10 +250,24 @@ impl Server {
                 }
             }
 
-            channel.participants.lock().await.insert(nick.clone());
+            let mut operator = false;
+            if participants.len() == 0 {
+                operator = true;
+            }
+
+            participants.insert(
+                nick.clone(),
+                ChannelUserModes {
+                    owner: false,
+                    admin: false,
+                    operator: operator,
+                    half_operator: false,
+                    voiced: false,
+                },
+            );
 
             let message = format!(":{} JOIN {}", nick, name);
-            for target in &*channel.participants.lock().await {
+            for target in participants.keys() {
                 if let Some(client) = self.clients.lock().await.get(target) {
                     client.send_raw(message.clone()).await;
                 }
@@ -305,7 +321,7 @@ impl Server {
             if channel.part(nick.to_string()).await {
                 let message = format!(":{} PART {} :{}", nick, name, part_message);
 
-                for target in &*channel.participants.lock().await {
+                for target in channel.participants.lock().await.keys() {
                     if let Some(client) = self.clients.lock().await.get(target) {
                         client.send_raw(message.clone()).await;
                     }
@@ -363,7 +379,7 @@ impl Server {
             .get(name.to_string().to_lowercase().as_str())
         {
             let message = format!(":{} KICK {} {} :{}", nick, name, kicked, kick_message);
-            for target in &*channel.participants.lock().await {
+            for target in channel.participants.lock().await.keys() {
                 if let Some(client) = self.clients.lock().await.get(target) {
                     client.send_raw(message.clone()).await;
                 }
@@ -419,7 +435,7 @@ impl Server {
             println!("[{}] {}: {}", name, prefix, message);
 
             let message = format!(":{} PRIVMSG {} :{}", prefix, name, message);
-            for target in &*channel.participants.lock().await {
+            for target in channel.participants.lock().await.keys() {
                 if let Some(client) = self.clients.lock().await.get(target) {
                     if client.get_prefix().await != prefix {
                         client.send_raw(message.clone()).await;
@@ -485,7 +501,7 @@ impl Server {
             channel.set_topic(sender.clone(), topic.clone()).await;
 
             let message = format!(":{} TOPIC {} :{}", sender, name, topic);
-            for target in &*channel.participants.lock().await {
+            for target in channel.participants.lock().await.keys() {
                 if let Some(client) = self.clients.lock().await.get(target) {
                     if client.get_prefix().await != sender {
                         client.send_raw(message.clone()).await;
@@ -520,7 +536,7 @@ impl Server {
                     .participants
                     .lock()
                     .await
-                    .iter()
+                    .keys()
                     .cloned()
                     .collect::<Vec<String>>()
                     .join(" ");
@@ -558,7 +574,10 @@ impl Server {
                     let topic = channel.topic.lock().await;
                     let participants = channel.participants.lock().await;
 
-                    if channel.modes.lock().await.secret && !oper && !participants.contains(&nick) {
+                    if channel.modes.lock().await.secret
+                        && !oper
+                        && !participants.contains_key(&nick)
+                    {
                         continue;
                     }
 
@@ -583,7 +602,7 @@ impl Server {
                 let topic = channel.topic.lock().await;
                 let participants = channel.participants.lock().await;
 
-                if channel.modes.lock().await.secret && !oper && !participants.contains(&nick) {
+                if channel.modes.lock().await.secret && !oper && !participants.contains_key(&nick) {
                     continue;
                 }
 
@@ -640,7 +659,7 @@ impl Server {
 
         for channel_name in &*client.channels.lock().await {
             if let Some(channel) = self.channels.lock().await.get(channel_name) {
-                for target in &*channel.participants.lock().await {
+                for target in channel.participants.lock().await.keys() {
                     targets.insert(target.clone());
                 }
             }
@@ -661,7 +680,7 @@ impl Server {
                 ":{} NOTICE @{} :{} invited {} into the channel.",
                 self.name, channel_name, nick, user
             );
-            for target in &*channel.participants.lock().await {
+            for target in channel.participants.lock().await.keys() {
                 if let Some(client) = self.clients.lock().await.get(target) {
                     client.send_raw(message.clone()).await;
                 }
@@ -721,7 +740,7 @@ impl Server {
                     if changes.len() > 0 {
                         let mut targets = HashSet::new();
 
-                        for target in &*channel.participants.lock().await {
+                        for target in channel.participants.lock().await.keys() {
                             targets.insert(target.clone());
                         }
 
