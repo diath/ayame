@@ -1,7 +1,7 @@
 use crate::client::Client;
 use crate::replies::NumericReply;
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::fmt::Write;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -22,11 +22,19 @@ pub struct ChannelModes {
     pub secret: bool,
 }
 
+pub struct ChannelUserModes {
+    pub owner: bool,
+    pub admin: bool,
+    pub operator: bool,
+    pub half_operator: bool,
+    pub voiced: bool,
+}
+
 pub struct Channel {
     pub name: String,
     pub topic: Mutex<ChannelTopic>,
     pub modes: Mutex<ChannelModes>,
-    pub participants: Mutex<HashSet<String>>,
+    pub participants: Mutex<HashMap<String, ChannelUserModes>>,
     pub invites: Mutex<HashSet<String>>,
 }
 
@@ -44,13 +52,13 @@ impl Channel {
                 no_external_messages: true,
                 secret: false,
             }),
-            participants: Mutex::new(HashSet::new()),
+            participants: Mutex::new(HashMap::new()),
             invites: Mutex::new(HashSet::new()),
         }
     }
 
     pub async fn has_participant(&self, name: &str) -> bool {
-        self.participants.lock().await.contains(name)
+        self.participants.lock().await.contains_key(name)
     }
 
     pub async fn is_invited(&self, name: &str) -> bool {
@@ -149,6 +157,7 @@ impl Channel {
                     flag = false;
                     changes.push('-');
                 }
+                /* Channel modes */
                 'i' => {
                     if modes.invite_only != flag {
                         modes.invite_only = flag;
@@ -224,6 +233,16 @@ impl Channel {
                         changes.push('s');
                     }
                 }
+                /* Channel user modes */
+                'q' | 'a' | 'o' | 'h' | 'v' => {
+                    if let Some(param) = params.get(index) {
+                        if self.toggle_user_mode(&param, ch, flag).await {
+                            changes.push(ch);
+                            changes_params.push(param.to_string());
+                        }
+                    }
+                    index += 1;
+                }
                 _ => {
                     client
                         .send_numeric_reply(
@@ -241,5 +260,48 @@ impl Channel {
 
         changes.push_str(&changes_params.join(" "));
         changes
+    }
+
+    pub async fn toggle_user_mode(&self, nick: &str, mode: char, flag: bool) -> bool {
+        let mut participants = self.participants.lock().await;
+        if let Some(modes) = participants.get_mut(nick) {
+            match mode {
+                'q' => {
+                    if modes.owner != flag {
+                        modes.owner = flag;
+                        return true;
+                    }
+                }
+                'a' => {
+                    if modes.admin != flag {
+                        modes.admin = flag;
+                        return true;
+                    }
+                }
+                'o' => {
+                    if modes.operator != flag {
+                        modes.operator = flag;
+                        return true;
+                    }
+                }
+                'h' => {
+                    if modes.half_operator != flag {
+                        modes.half_operator = flag;
+                        return true;
+                    }
+                }
+                'v' => {
+                    if modes.voiced != flag {
+                        modes.voiced = flag;
+                        return true;
+                    }
+                }
+                _ => {
+                    return false;
+                }
+            }
+        }
+
+        false
     }
 }

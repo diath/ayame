@@ -436,7 +436,7 @@ impl Client {
                 if self.server.join_channel(target, password, self).await {
                     self.channels.lock().await.insert(target.to_string());
 
-                    // NOTE(diath): This cannot be handled in Server::join_channel method or we will end up with a deadlock.
+                    /* NOTE(diath): This cannot be handled in Server::join_channel method or we will end up with a deadlock. */
                     self.server.send_names(self, target.to_string()).await;
                 }
             }
@@ -578,7 +578,7 @@ impl Client {
     }
 
     async fn on_invite(&self, message: Message) {
-        // TODO(diath): ERR_CHANOPRIVSNEEDED, RPL_AWAY.
+        /* TODO(diath): ERR_CHANOPRIVSNEEDED, RPL_AWAY. */
         if message.params.len() < 2 {
             self.send_numeric_reply(
                 NumericReply::ErrNeedMoreParams,
@@ -777,7 +777,7 @@ impl Client {
                         .forward_channel_message(self, target, text.clone())
                         .await;
                 }
-                //* NOTE(diath): Technically a channel can be prefixed with either # (network), ! (safe), + (unmoderated) or & (local) but we only support #. */
+                /* NOTE(diath): Technically a channel can be prefixed with either # (network), ! (safe), + (unmoderated) or & (local) but we only support #. */
                 "!" | "&" | "+" => {
                     self.send_numeric_reply(
                         NumericReply::ErrNoSuchChannel,
@@ -895,7 +895,7 @@ impl Client {
                     .handle_channel_mode(self, &target, message.params[1..].to_vec())
                     .await;
             }
-            //* NOTE(diath): Technically a channel can be prefixed with either # (network), ! (safe), + (unmoderated) or & (local) but we only support #. */
+            /* NOTE(diath): Technically a channel can be prefixed with either # (network), ! (safe), + (unmoderated) or & (local) but we only support #. */
             "!" | "&" | "+" => {
                 self.send_numeric_reply(
                     NumericReply::ErrNoSuchChannel,
