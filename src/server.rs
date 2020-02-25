@@ -449,7 +449,7 @@ impl Server {
             // NOTE(diath): Operators can always send messages to any channel.
             if !*client.operator.lock().await {
                 let modes = channel.modes.lock().await;
-                if !channel.has_participant(&nick).await && modes.no_external_messages {
+                if modes.no_external_messages && !channel.has_participant(&nick).await {
                     client
                         .send_numeric_reply(
                             NumericReply::ErrCannotSendToChan,
