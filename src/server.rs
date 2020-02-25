@@ -448,9 +448,8 @@ impl Server {
 
             // NOTE(diath): Operators can always send messages to any channel.
             if !*client.operator.lock().await {
-                if !channel.has_participant(&nick).await
-                    && channel.modes.lock().await.no_external_messages
-                {
+                let modes = channel.modes.lock().await;
+                if !channel.has_participant(&nick).await && modes.no_external_messages {
                     client
                         .send_numeric_reply(
                             NumericReply::ErrCannotSendToChan,
@@ -461,7 +460,15 @@ impl Server {
                     return;
                 }
 
-                // TODO(diath): Check for channel +m mode and user -v mode.
+                if modes.moderated && !channel.is_voiced(&nick).await {
+                    client
+                        .send_numeric_reply(
+                            NumericReply::ErrCannotSendToChan,
+                            format!("{} :You need voice (+v) ({})", &name, &name).to_string(),
+                        )
+                        .await;
+                    return;
+                }
             }
 
             println!("[{}] {}: {}", name, prefix, message);
