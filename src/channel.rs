@@ -21,6 +21,7 @@ pub struct ChannelModes {
     pub limit: usize,
     pub no_external_messages: bool,
     pub secret: bool,
+    pub restrict_topic: bool,
 }
 
 pub struct ChannelUserModes {
@@ -91,6 +92,7 @@ impl Channel {
                 limit: 0,
                 no_external_messages: true,
                 secret: false,
+                restrict_topic: true,
             }),
             participants: RwLock::new(HashMap::new()),
             invites: Mutex::new(HashSet::new()),
@@ -157,6 +159,10 @@ impl Channel {
 
         if modes.secret {
             write!(desc, "s").expect("");
+        }
+
+        if modes.restrict_topic {
+            write!(desc, "t").expect("");
         }
 
         if with_params {
@@ -281,6 +287,12 @@ impl Channel {
                     if modes.secret != flag {
                         modes.secret = flag;
                         changes.push('s');
+                    }
+                }
+                't' => {
+                    if modes.restrict_topic != flag {
+                        modes.restrict_topic = flag;
+                        changes.push('t');
                     }
                 }
                 /* Channel user modes */
