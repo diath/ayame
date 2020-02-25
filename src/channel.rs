@@ -5,7 +5,7 @@ use std::collections::{HashMap, HashSet};
 use std::fmt::Write;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, RwLock};
 
 #[derive(Default)]
 pub struct ChannelTopic {
@@ -34,8 +34,46 @@ pub struct Channel {
     pub name: String,
     pub topic: Mutex<ChannelTopic>,
     pub modes: Mutex<ChannelModes>,
-    pub participants: Mutex<HashMap<String, ChannelUserModes>>,
+    pub participants: RwLock<HashMap<String, ChannelUserModes>>,
     pub invites: Mutex<HashSet<String>>,
+}
+
+impl ChannelUserModes {
+    pub fn is_owner(modes: &ChannelUserModes) -> bool {
+        return modes.owner;
+    }
+
+    pub fn is_admin(modes: &ChannelUserModes, explicit: bool) -> bool {
+        if explicit {
+            return modes.admin;
+        }
+
+        return modes.owner || modes.admin;
+    }
+
+    pub fn is_operator(modes: &ChannelUserModes, explicit: bool) -> bool {
+        if explicit {
+            return modes.operator;
+        }
+
+        return modes.owner || modes.admin || modes.operator;
+    }
+
+    pub fn is_half_operator(modes: &ChannelUserModes, explicit: bool) -> bool {
+        if explicit {
+            return modes.half_operator;
+        }
+
+        return modes.owner || modes.admin || modes.operator || modes.half_operator;
+    }
+
+    pub fn is_voiced(modes: &ChannelUserModes, explicit: bool) -> bool {
+        if explicit {
+            return modes.voiced;
+        }
+
+        return modes.owner || modes.admin || modes.operator || modes.half_operator || modes.voiced;
+    }
 }
 
 impl Channel {
@@ -52,13 +90,13 @@ impl Channel {
                 no_external_messages: true,
                 secret: false,
             }),
-            participants: Mutex::new(HashMap::new()),
+            participants: RwLock::new(HashMap::new()),
             invites: Mutex::new(HashSet::new()),
         }
     }
 
     pub async fn has_participant(&self, name: &str) -> bool {
-        self.participants.lock().await.contains_key(name)
+        self.participants.read().await.contains_key(name)
     }
 
     pub async fn is_invited(&self, name: &str) -> bool {
@@ -67,7 +105,7 @@ impl Channel {
 
     pub async fn part(&self, name: String) -> bool {
         if self.has_participant(name.as_str()).await {
-            self.participants.lock().await.remove(&name);
+            self.participants.write().await.remove(&name);
             println!("[{}] {} left.", self.name, name.clone());
             return true;
         }
@@ -76,7 +114,7 @@ impl Channel {
     }
 
     pub async fn remove(&self, name: String) {
-        self.participants.lock().await.remove(&name);
+        self.participants.write().await.remove(&name);
     }
 
     pub async fn set_topic(&self, sender: String, text: String) {
@@ -236,9 +274,13 @@ impl Channel {
                 /* Channel user modes */
                 'q' | 'a' | 'o' | 'h' | 'v' => {
                     if let Some(param) = params.get(index) {
-                        if self.toggle_user_mode(&param, ch, flag).await {
-                            changes.push(ch);
-                            changes_params.push(param.to_string());
+                        let nick = client.nick.lock().await.to_string();
+                        let oper = *client.operator.lock().await;
+                        if oper || self.can_toggle_user_mode(&nick, ch, flag).await {
+                            if self.toggle_user_mode(&param, ch, flag).await {
+                                changes.push(ch);
+                                changes_params.push(param.to_string());
+                            }
                         }
                     }
                     index += 1;
@@ -262,9 +304,39 @@ impl Channel {
         changes
     }
 
+    pub async fn can_toggle_user_mode(&self, set_by: &str, mode: char, flag: bool) -> bool {
+        if let Some(modes) = self.participants.read().await.get(set_by) {
+            match mode {
+                'q' => {
+                    return ChannelUserModes::is_owner(modes);
+                }
+                'a' => {
+                    return ChannelUserModes::is_admin(modes, false);
+                }
+                'o' => {
+                    return ChannelUserModes::is_operator(modes, false);
+                }
+                'h' => {
+                    return ChannelUserModes::is_half_operator(modes, false);
+                }
+                'v' => {
+                    if flag {
+                        return ChannelUserModes::is_half_operator(modes, false);
+                    } else {
+                        return ChannelUserModes::is_voiced(modes, false);
+                    }
+                }
+                _ => {
+                    return false;
+                }
+            }
+        }
+
+        false
+    }
+
     pub async fn toggle_user_mode(&self, nick: &str, mode: char, flag: bool) -> bool {
-        let mut participants = self.participants.lock().await;
-        if let Some(modes) = participants.get_mut(nick) {
+        if let Some(modes) = self.participants.write().await.get_mut(nick) {
             match mode {
                 'q' => {
                     if modes.owner != flag {
@@ -300,6 +372,40 @@ impl Channel {
                     return false;
                 }
             }
+        }
+
+        false
+    }
+
+    pub async fn has_access(&self, nick: &str, other: &str) -> bool {
+        if let Some(modes) = self.participants.read().await.get(nick) {
+            if let Some(modes_other) = self.participants.read().await.get(other) {
+                if ChannelUserModes::is_owner(modes) {
+                    return true;
+                }
+
+                if ChannelUserModes::is_admin(modes, false) {
+                    return !ChannelUserModes::is_owner(modes_other);
+                }
+
+                if ChannelUserModes::is_operator(modes, false) {
+                    return !ChannelUserModes::is_admin(modes_other, false);
+                }
+
+                if ChannelUserModes::is_half_operator(modes, false) {
+                    return !ChannelUserModes::is_operator(modes_other, false);
+                }
+            }
+
+            return false;
+        }
+
+        false
+    }
+
+    pub async fn is_operator(&self, nick: &str) -> bool {
+        if let Some(modes) = self.participants.read().await.get(nick) {
+            return ChannelUserModes::is_operator(modes, false);
         }
 
         false
