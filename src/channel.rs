@@ -15,6 +15,7 @@ pub struct ChannelTopic {
 }
 
 pub struct ChannelModes {
+    pub moderated: bool,
     pub invite_only: bool,
     pub password: String,
     pub limit: usize,
@@ -84,6 +85,7 @@ impl Channel {
                 ..Default::default()
             }),
             modes: Mutex::new(ChannelModes {
+                moderated: false,
                 invite_only: false,
                 password: "".to_string(),
                 limit: 0,
@@ -132,6 +134,10 @@ impl Channel {
     pub async fn get_modes_description(&self, with_params: bool) -> String {
         let mut desc = "+".to_string();
         let modes = self.modes.lock().await;
+
+        if modes.moderated {
+            write!(desc, "m").expect("");
+        }
 
         if modes.invite_only {
             write!(desc, "i").expect("");
@@ -196,6 +202,12 @@ impl Channel {
                     changes.push('-');
                 }
                 /* Channel modes */
+                'm' => {
+                    if modes.moderated != flag {
+                        modes.moderated = flag;
+                        changes.push('m');
+                    }
+                }
                 'i' => {
                     if modes.invite_only != flag {
                         modes.invite_only = flag;
@@ -404,6 +416,14 @@ impl Channel {
     }
 
     pub async fn is_operator(&self, nick: &str) -> bool {
+        if let Some(modes) = self.participants.read().await.get(nick) {
+            return ChannelUserModes::is_operator(modes, false);
+        }
+
+        false
+    }
+
+    pub async fn is_voiced(&self, nick: &str) -> bool {
         if let Some(modes) = self.participants.read().await.get(nick) {
             return ChannelUserModes::is_operator(modes, false);
         }
