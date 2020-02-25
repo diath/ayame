@@ -490,7 +490,7 @@ impl Client {
     }
 
     async fn on_topic(&self, message: Message) {
-        /* TODO(diath): ERR_CHANOPRIVSNEEDED, ERR_NOCHANMODES */
+        /* TODO(diath): ERR_NOCHANMODES */
         if message.params.len() < 1 {
             self.send_numeric_reply(
                 NumericReply::ErrNeedMoreParams,
@@ -506,7 +506,7 @@ impl Client {
             let nick = self.nick.lock().await.to_string();
             if self.server.has_channel_participant(&channel, &nick).await {
                 self.server
-                    .set_channel_topic(nick, &channel, message.params[1].clone())
+                    .set_channel_topic(self, &channel, message.params[1].clone())
                     .await;
             } else {
                 self.send_numeric_reply(
@@ -578,7 +578,7 @@ impl Client {
     }
 
     async fn on_invite(&self, message: Message) {
-        /* TODO(diath): ERR_CHANOPRIVSNEEDED, RPL_AWAY. */
+        /* TODO(diath): RPL_AWAY. */
         if message.params.len() < 2 {
             self.send_numeric_reply(
                 NumericReply::ErrNeedMoreParams,
@@ -628,18 +628,19 @@ impl Client {
             return;
         }
 
-        self.server.invite_channel(&target, &user).await;
-        self.server.broadcast_invite(self, &target, &user).await;
+        if self.server.invite_channel(self, &target, &user).await {
+            self.server.broadcast_invite(self, &target, &user).await;
 
-        self.send_numeric_reply(
-            NumericReply::RplInviting,
-            format!("{} {}", user, target).to_string(),
-        )
-        .await;
+            self.send_numeric_reply(
+                NumericReply::RplInviting,
+                format!("{} {}", user, target).to_string(),
+            )
+            .await;
+        }
     }
 
     async fn on_kick(&self, message: Message) {
-        /* TODO(diath): ERR_BADCHANMASK, ERR_CHANOPRIVSNEEDED */
+        /* TODO(diath): ERR_BADCHANMASK */
         if message.params.len() < 2 {
             self.send_numeric_reply(
                 NumericReply::ErrNeedMoreParams,
@@ -696,7 +697,7 @@ impl Client {
 
                 if self
                     .server
-                    .kick_channel(target, &nick, user, message.clone())
+                    .kick_channel(self, target, user, message.clone())
                     .await
                 {
                     self.channels.lock().await.remove(&nick);
@@ -734,7 +735,7 @@ impl Client {
 
                 if self
                     .server
-                    .kick_channel(target, &nick, user, message.clone())
+                    .kick_channel(self, target, user, message.clone())
                     .await
                 {
                     self.channels.lock().await.remove(&nick);

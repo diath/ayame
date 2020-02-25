@@ -46,5 +46,6 @@ pub enum NumericReply {
     ErrInviteOnlyChan = 473,
     ErrBadChannelKey = 475,
     ErrNoPrivileges = 481,
+    ErrChanOpPrivsNeeded = 482,
     ErrUsersDontMatch = 502,
 }

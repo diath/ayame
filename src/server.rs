@@ -214,7 +214,7 @@ impl Server {
                 return false;
             }
 
-            let mut participants = channel.participants.lock().await;
+            let mut participants = channel.participants.write().await;
 
             // NOTE(diath): Operators are exempt from join limits.
             if !oper {
@@ -321,7 +321,7 @@ impl Server {
             if channel.part(nick.to_string()).await {
                 let message = format!(":{} PART {} :{}", nick, name, part_message);
 
-                for target in channel.participants.lock().await.keys() {
+                for target in channel.participants.read().await.keys() {
                     if let Some(client) = self.clients.lock().await.get(target) {
                         client.send_raw(message.clone()).await;
                     }
@@ -332,7 +332,7 @@ impl Server {
                     client.send_raw(message.clone()).await;
                 }
 
-                if channel.participants.lock().await.len() == 0 {
+                if channel.participants.read().await.len() == 0 {
                     remove = true;
                 }
 
@@ -350,21 +350,36 @@ impl Server {
         result
     }
 
-    pub async fn invite_channel(&self, name: &str, user: &str) {
+    pub async fn invite_channel(&self, client: &Client, channel_name: &str, invited: &str) -> bool {
         if let Some(channel) = self
             .channels
             .lock()
             .await
-            .get(name.to_string().to_lowercase().as_str())
+            .get(channel_name.to_string().to_lowercase().as_str())
         {
-            channel.invites.lock().await.insert(user.to_string());
+            let nick = client.nick.lock().await.to_string();
+            let oper = *client.operator.lock().await;
+            if !oper && !channel.is_operator(&nick).await {
+                client
+                    .send_numeric_reply(
+                        NumericReply::ErrChanOpPrivsNeeded,
+                        format!("{} :You're not channel operator", channel_name).to_string(),
+                    )
+                    .await;
+                return false;
+            }
+
+            channel.invites.lock().await.insert(invited.to_string());
+            return true;
         }
+
+        false
     }
 
     pub async fn kick_channel(
         &self,
-        name: &str,
-        nick: &str,
+        client: &Client,
+        channel_name: &str,
         kicked: &str,
         kick_message: String,
     ) -> bool {
@@ -376,28 +391,45 @@ impl Server {
             .channels
             .lock()
             .await
-            .get(name.to_string().to_lowercase().as_str())
+            .get(channel_name.to_string().to_lowercase().as_str())
         {
-            let message = format!(":{} KICK {} {} :{}", nick, name, kicked, kick_message);
-            for target in channel.participants.lock().await.keys() {
-                if let Some(client) = self.clients.lock().await.get(target) {
-                    client.send_raw(message.clone()).await;
+            let nick = client.nick.lock().await.to_string();
+            let oper = *client.operator.lock().await;
+            if !oper && !channel.is_operator(&nick).await {
+                client
+                    .send_numeric_reply(
+                        NumericReply::ErrChanOpPrivsNeeded,
+                        format!("{} :You're not channel operator", channel_name).to_string(),
+                    )
+                    .await;
+                return false;
+            }
+
+            if oper || nick == kicked.to_string() || channel.has_access(&nick, kicked).await {
+                let message = format!(
+                    ":{} KICK {} {} :{}",
+                    nick, channel_name, kicked, kick_message
+                );
+                for target in channel.participants.read().await.keys() {
+                    if let Some(client) = self.clients.lock().await.get(target) {
+                        client.send_raw(message.clone()).await;
+                    }
                 }
-            }
 
-            channel.remove(kicked.to_string()).await;
-            if channel.participants.lock().await.len() == 0 {
-                remove = true;
-            }
+                channel.remove(kicked.to_string()).await;
+                if channel.participants.read().await.len() == 0 {
+                    remove = true;
+                }
 
-            result = true;
+                result = true;
+            }
         }
 
         if remove {
             self.channels
                 .lock()
                 .await
-                .remove(name.to_string().to_lowercase().as_str());
+                .remove(channel_name.to_string().to_lowercase().as_str());
         }
 
         result
@@ -435,7 +467,7 @@ impl Server {
             println!("[{}] {}: {}", name, prefix, message);
 
             let message = format!(":{} PRIVMSG {} :{}", prefix, name, message);
-            for target in channel.participants.lock().await.keys() {
+            for target in channel.participants.read().await.keys() {
                 if let Some(client) = self.clients.lock().await.get(target) {
                     if client.get_prefix().await != prefix {
                         client.send_raw(message.clone()).await;
@@ -488,22 +520,33 @@ impl Server {
         }
     }
 
-    pub async fn set_channel_topic(&self, sender: String, name: &str, topic: String) {
+    pub async fn set_channel_topic(&self, client: &Client, channel_name: &str, topic: String) {
         /* TODO(diath): This should broadcast user prefix and not nick. */
         if let Some(channel) = self
             .channels
             .lock()
             .await
-            .get(name.to_string().to_lowercase().as_str())
+            .get(channel_name.to_string().to_lowercase().as_str())
         {
-            println!("[{}] {} changed topic to {}", name, sender, topic);
-            // NOTE(diath): The topic sender should be just the name, not the prefix.
-            channel.set_topic(sender.clone(), topic.clone()).await;
+            let nick = client.nick.lock().await.to_string();
+            if !channel.is_operator(&nick).await {
+                client
+                    .send_numeric_reply(
+                        NumericReply::ErrChanOpPrivsNeeded,
+                        format!("{} :You're not channel operator", channel_name).to_string(),
+                    )
+                    .await;
+                return;
+            }
 
-            let message = format!(":{} TOPIC {} :{}", sender, name, topic);
-            for target in channel.participants.lock().await.keys() {
+            println!("[{}] {} changed topic to {}", channel_name, nick, topic);
+            // NOTE(diath): The topic sender should be just the name, not the prefix.
+            channel.set_topic(nick.to_string(), topic.clone()).await;
+
+            let message = format!(":{} TOPIC {} :{}", nick, channel_name, topic);
+            for target in channel.participants.read().await.keys() {
                 if let Some(client) = self.clients.lock().await.get(target) {
-                    if client.get_prefix().await != sender {
+                    if client.get_prefix().await != nick.to_string() {
                         client.send_raw(message.clone()).await;
                     }
                 }
@@ -534,7 +577,7 @@ impl Server {
                 /* TODO(diath): The names list should also contain user prefixes. */
                 let names = channel
                     .participants
-                    .lock()
+                    .read()
                     .await
                     .keys()
                     .cloned()
@@ -572,7 +615,7 @@ impl Server {
                     let oper = *client.operator.lock().await;
                     let nick = client.nick.lock().await.to_string();
                     let topic = channel.topic.lock().await;
-                    let participants = channel.participants.lock().await;
+                    let participants = channel.participants.read().await;
 
                     if channel.modes.lock().await.secret
                         && !oper
@@ -600,7 +643,7 @@ impl Server {
                 let oper = *client.operator.lock().await;
                 let nick = client.nick.lock().await.to_string();
                 let topic = channel.topic.lock().await;
-                let participants = channel.participants.lock().await;
+                let participants = channel.participants.read().await;
 
                 if channel.modes.lock().await.secret && !oper && !participants.contains_key(&nick) {
                     continue;
@@ -659,7 +702,7 @@ impl Server {
 
         for channel_name in &*client.channels.lock().await {
             if let Some(channel) = self.channels.lock().await.get(channel_name) {
-                for target in channel.participants.lock().await.keys() {
+                for target in channel.participants.read().await.keys() {
                     targets.insert(target.clone());
                 }
             }
@@ -680,7 +723,7 @@ impl Server {
                 ":{} NOTICE @{} :{} invited {} into the channel.",
                 self.name, channel_name, nick, user
             );
-            for target in channel.participants.lock().await.keys() {
+            for target in channel.participants.read().await.keys() {
                 if let Some(client) = self.clients.lock().await.get(target) {
                     client.send_raw(message.clone()).await;
                 }
@@ -705,7 +748,6 @@ impl Server {
         channel_name: &str,
         params: Vec<String>,
     ) {
-        // TODO(diath): ERR_CHANOPRIVSNEEDED.
         if let Some(channel) = self.channels.lock().await.get(channel_name) {
             let nick = client.nick.lock().await.to_string();
             let oper = *client.operator.lock().await;
@@ -736,11 +778,22 @@ impl Server {
                     .await;
             } else {
                 if oper || has_participant {
+                    if !oper && !channel.is_operator(&nick).await {
+                        client
+                            .send_numeric_reply(
+                                NumericReply::ErrChanOpPrivsNeeded,
+                                format!("{} :You're not channel operator", channel_name)
+                                    .to_string(),
+                            )
+                            .await;
+                        return;
+                    }
+
                     let changes = channel.toggle_modes(client, params).await;
                     if changes.len() > 0 {
                         let mut targets = HashSet::new();
 
-                        for target in channel.participants.lock().await.keys() {
+                        for target in channel.participants.read().await.keys() {
                             targets.insert(target.clone());
                         }
 
