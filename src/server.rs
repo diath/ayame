@@ -536,7 +536,11 @@ impl Server {
             .get(channel_name.to_string().to_lowercase().as_str())
         {
             let nick = client.nick.lock().await.to_string();
-            if !channel.is_operator(&nick).await {
+            let oper = *client.operator.lock().await;
+            if !oper
+                && channel.modes.lock().await.restrict_topic
+                && !channel.is_operator(&nick).await
+            {
                 client
                     .send_numeric_reply(
                         NumericReply::ErrChanOpPrivsNeeded,
