@@ -585,19 +585,15 @@ impl Server {
         if let Some(channel) = self.channels.lock().await.get(&channel_name) {
             let has_participant = channel.has_participant(&nick).await;
             if is_operator || has_participant {
-                /* TODO(diath): The names list should also contain user prefixes. */
-                let names = channel
-                    .participants
-                    .read()
-                    .await
-                    .keys()
-                    .cloned()
-                    .collect::<Vec<String>>()
-                    .join(" ");
+                let mut names = vec![];
+                for (name, modes) in &*channel.participants.read().await {
+                    names.push(format!("{}{}", modes.get_prefix(), name));
+                }
+
                 client
                     .send_numeric_reply(
                         NumericReply::RplNamReply,
-                        format!("= {} :{}", channel_name, names),
+                        format!("= {} :{}", channel_name, names.join(" ")),
                     )
                     .await;
             }
