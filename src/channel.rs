@@ -41,40 +41,40 @@ pub struct Channel {
 }
 
 impl ChannelUserModes {
-    pub fn is_owner(modes: &ChannelUserModes) -> bool {
-        return modes.owner;
+    pub fn is_owner(&self) -> bool {
+        return self.owner;
     }
 
-    pub fn is_admin(modes: &ChannelUserModes, explicit: bool) -> bool {
+    pub fn is_admin(&self, explicit: bool) -> bool {
         if explicit {
-            return modes.admin;
+            return self.admin;
         }
 
-        return modes.owner || modes.admin;
+        return self.owner || self.admin;
     }
 
-    pub fn is_operator(modes: &ChannelUserModes, explicit: bool) -> bool {
+    pub fn is_operator(&self, explicit: bool) -> bool {
         if explicit {
-            return modes.operator;
+            return self.operator;
         }
 
-        return modes.owner || modes.admin || modes.operator;
+        return self.owner || self.admin || self.operator;
     }
 
-    pub fn is_half_operator(modes: &ChannelUserModes, explicit: bool) -> bool {
+    pub fn is_half_operator(self: &ChannelUserModes, explicit: bool) -> bool {
         if explicit {
-            return modes.half_operator;
+            return self.half_operator;
         }
 
-        return modes.owner || modes.admin || modes.operator || modes.half_operator;
+        return self.owner || self.admin || self.operator || self.half_operator;
     }
 
-    pub fn is_voiced(modes: &ChannelUserModes, explicit: bool) -> bool {
+    pub fn is_voiced(&self, explicit: bool) -> bool {
         if explicit {
-            return modes.voiced;
+            return self.voiced;
         }
 
-        return modes.owner || modes.admin || modes.operator || modes.half_operator || modes.voiced;
+        return self.owner || self.admin || self.operator || self.half_operator || self.voiced;
     }
 }
 
@@ -332,22 +332,22 @@ impl Channel {
         if let Some(modes) = self.participants.read().await.get(set_by) {
             match mode {
                 'q' => {
-                    return ChannelUserModes::is_owner(modes);
+                    return modes.is_owner();
                 }
                 'a' => {
-                    return ChannelUserModes::is_admin(modes, false);
+                    return modes.is_admin(false);
                 }
                 'o' => {
-                    return ChannelUserModes::is_operator(modes, false);
+                    return modes.is_operator(false);
                 }
                 'h' => {
-                    return ChannelUserModes::is_half_operator(modes, false);
+                    return modes.is_half_operator(false);
                 }
                 'v' => {
                     if flag {
-                        return ChannelUserModes::is_half_operator(modes, false);
+                        return modes.is_half_operator(false);
                     } else {
-                        return ChannelUserModes::is_voiced(modes, false);
+                        return modes.is_voiced(false);
                     }
                 }
                 _ => {
@@ -404,20 +404,20 @@ impl Channel {
     pub async fn has_access(&self, nick: &str, other: &str) -> bool {
         if let Some(modes) = self.participants.read().await.get(nick) {
             if let Some(modes_other) = self.participants.read().await.get(other) {
-                if ChannelUserModes::is_owner(modes) {
+                if modes.is_owner() {
                     return true;
                 }
 
-                if ChannelUserModes::is_admin(modes, false) {
-                    return !ChannelUserModes::is_owner(modes_other);
+                if modes.is_admin(false) {
+                    return !modes_other.is_owner();
                 }
 
-                if ChannelUserModes::is_operator(modes, false) {
-                    return !ChannelUserModes::is_admin(modes_other, false);
+                if modes.is_operator(false) {
+                    return !modes_other.is_admin(false);
                 }
 
-                if ChannelUserModes::is_half_operator(modes, false) {
-                    return !ChannelUserModes::is_operator(modes_other, false);
+                if modes.is_half_operator(false) {
+                    return !modes_other.is_operator(false);
                 }
             }
 
@@ -429,7 +429,7 @@ impl Channel {
 
     pub async fn is_operator(&self, nick: &str) -> bool {
         if let Some(modes) = self.participants.read().await.get(nick) {
-            return ChannelUserModes::is_operator(modes, false);
+            return modes.is_operator(false);
         }
 
         false
@@ -437,7 +437,7 @@ impl Channel {
 
     pub async fn is_voiced(&self, nick: &str) -> bool {
         if let Some(modes) = self.participants.read().await.get(nick) {
-            return ChannelUserModes::is_operator(modes, false);
+            return modes.is_voiced(false);
         }
 
         false
