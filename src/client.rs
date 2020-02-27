@@ -314,7 +314,7 @@ impl Client {
                 )
                 .await;
             } else {
-                if let Some(_) = nick.chars().position(|c| !c.is_ascii_alphanumeric()) {
+                if !Client::is_nick_valid(nick.to_string()) {
                     self.send_numeric_reply(
                         NumericReply::ErrErroneousNickname,
                         format!("{} :Erroneous nickname", nick),
@@ -910,5 +910,23 @@ impl Client {
                     .await;
             }
         }
+    }
+
+    fn is_nick_valid(nick: String) -> bool {
+        if nick.len() < 1 {
+            return false;
+        }
+
+        if nick.len() > 24 {
+            return false;
+        }
+
+        for ch in nick.chars() {
+            if !ch.is_ascii_alphanumeric() && ch != '_' && ch != '-' {
+                return false;
+            }
+        }
+
+        true
     }
 }
