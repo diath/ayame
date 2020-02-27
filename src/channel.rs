@@ -76,6 +76,22 @@ impl ChannelUserModes {
 
         return self.owner || self.admin || self.operator || self.half_operator || self.voiced;
     }
+
+    pub fn get_prefix(&self) -> &str {
+        if self.is_owner() {
+            return "~";
+        } else if self.is_admin(false) {
+            return "&";
+        } else if self.is_operator(false) {
+            return "@";
+        } else if self.is_half_operator(false) {
+            return "%";
+        } else if self.is_voiced(false) {
+            return "+";
+        }
+
+        return "";
+    }
 }
 
 impl Channel {
