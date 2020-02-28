@@ -221,7 +221,6 @@ impl Channel {
                     }
                 }
                 'k' => {
-                    changes.push('k');
                     if flag {
                         if let Some(param) = params.get(index) {
                             if self.modes.lock().await.password.to_string().len() > 0 {
