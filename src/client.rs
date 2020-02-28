@@ -53,9 +53,9 @@ impl Client {
     pub async fn get_prefix(&self) -> String {
         return format!(
             "{}!{}@{}",
-            self.nick.lock().await,
-            self.user.lock().await,
-            self.host.lock().await
+            self.nick.lock().await.to_string(),
+            self.user.lock().await.to_string(),
+            self.host.lock().await.to_string()
         );
     }
 
@@ -95,9 +95,9 @@ impl Client {
 
         self.server.remove_from_channels(&self).await;
 
-        let nick = self.nick.lock().await;
+        let nick = self.nick.lock().await.to_string();
         if nick.len() != 0 {
-            self.server.unmap_nick(nick.to_string()).await;
+            self.server.unmap_nick(nick).await;
         }
 
         self.server.unmap_client(&self).await;
@@ -120,7 +120,7 @@ impl Client {
     }
 
     pub async fn send_numeric_reply(&self, reply: NumericReply, message: String) {
-        let nick = self.nick.lock().await;
+        let nick = self.nick.lock().await.to_string();
         self.send_raw(format!(
             ":{} {:03} {} {}",
             self.server.name, reply as i32, nick, message
