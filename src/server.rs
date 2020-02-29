@@ -161,15 +161,27 @@ impl Server {
         }
     }
 
-    pub async fn forward_message(&self, sender: String, name: &str, message: String) {
+    pub async fn forward_message(&self, sender: &Client, name: &str, message: String) {
         if !self.clients.lock().await.contains_key(name) {
             panic!("forward_message()");
         }
 
         if let Some(client) = self.clients.lock().await.get(name) {
             client
-                .send_raw(format!(":{} PRIVMSG {} :{}", sender, name, message))
+                .send_raw(format!(
+                    ":{} PRIVMSG {} :{}",
+                    sender.get_prefix().await,
+                    name,
+                    message
+                ))
                 .await;
+
+            let away = client.away_message.lock().await.to_string();
+            if away.len() > 0 {
+                sender
+                    .send_numeric_reply(NumericReply::RplAway, format!("{}: {}", name, away))
+                    .await;
+            }
         }
     }
 
@@ -350,7 +362,7 @@ impl Server {
         result
     }
 
-    pub async fn invite_channel(&self, client: &Client, channel_name: &str, invited: &str) -> bool {
+    pub async fn invite_channel(&self, client: &Client, channel_name: &str, invited_nick: &str) {
         if let Some(channel) = self
             .channels
             .lock()
@@ -366,14 +378,36 @@ impl Server {
                         format!("{} :You're not channel operator", channel_name).to_string(),
                     )
                     .await;
-                return false;
+                return;
             }
 
-            channel.invites.lock().await.insert(invited.to_string());
-            return true;
-        }
+            channel
+                .invites
+                .lock()
+                .await
+                .insert(invited_nick.to_string());
 
-        false
+            self.broadcast_invite(client, channel, &invited_nick).await;
+
+            client
+                .send_numeric_reply(
+                    NumericReply::RplInviting,
+                    format!("{} {}", invited_nick, channel_name).to_string(),
+                )
+                .await;
+
+            if let Some(invited) = self.clients.lock().await.get(invited_nick) {
+                let away = invited.away_message.lock().await.to_string();
+                if away.len() > 0 {
+                    client
+                        .send_numeric_reply(
+                            NumericReply::RplAway,
+                            format!("{}: {}", invited_nick, away),
+                        )
+                        .await;
+                }
+            }
+        }
     }
 
     pub async fn kick_channel(
@@ -723,29 +757,27 @@ impl Server {
         }
     }
 
-    pub async fn broadcast_invite(&self, client: &Client, channel_name: &str, user: &str) {
-        if let Some(channel) = self.channels.lock().await.get(channel_name) {
-            let nick = client.nick.lock().await.to_string();
-            let message = format!(
-                ":{} NOTICE @{} :{} invited {} into the channel.",
-                self.name, channel_name, nick, user
-            );
-            for target in channel.participants.read().await.keys() {
-                if let Some(client) = self.clients.lock().await.get(target) {
-                    client.send_raw(message.clone()).await;
-                }
+    pub async fn broadcast_invite(&self, client: &Client, channel: &Channel, user: &str) {
+        let nick = client.nick.lock().await.to_string();
+        let message = format!(
+            ":{} NOTICE @{} :{} invited {} into the channel.",
+            self.name, channel.name, nick, user
+        );
+        for target in channel.participants.read().await.keys() {
+            if let Some(client) = self.clients.lock().await.get(target) {
+                client.send_raw(message.clone()).await;
             }
+        }
 
-            if let Some(invited) = self.clients.lock().await.get(user) {
-                invited
-                    .send_raw(format!(
-                        ":{} INVITE {} :{}",
-                        client.get_prefix().await,
-                        nick,
-                        channel_name
-                    ))
-                    .await;
-            }
+        if let Some(invited) = self.clients.lock().await.get(user) {
+            invited
+                .send_raw(format!(
+                    ":{} INVITE {} :{}",
+                    client.get_prefix().await,
+                    nick,
+                    channel.name
+                ))
+                .await;
         }
     }
 
