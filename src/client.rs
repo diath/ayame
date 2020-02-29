@@ -26,6 +26,7 @@ pub struct Client {
     pub registered: Mutex<bool>,
     pub operator: Mutex<bool>,
     pub channels: Mutex<HashSet<String>>,
+    pub away_message: Mutex<String>,
     server: Arc<Server>,
     address: SocketAddr,
     writer: Mutex<Option<WriteHalf<TcpStream>>>,
@@ -43,6 +44,7 @@ impl Client {
             registered: Mutex::new(false),
             operator: Mutex::new(false),
             channels: Mutex::new(HashSet::new()),
+            away_message: Mutex::new(String::new()),
             server: server,
             address: address,
             writer: Mutex::new(None),
@@ -267,6 +269,9 @@ impl Client {
                 /* Other */
                 "MODE" => {
                     self.on_mode(message).await;
+                }
+                "AWAY" => {
+                    self.on_away(message).await;
                 }
                 _ => {
                     if *self.registered.lock().await {
@@ -628,15 +633,7 @@ impl Client {
             return;
         }
 
-        if self.server.invite_channel(self, &target, &user).await {
-            self.server.broadcast_invite(self, &target, &user).await;
-
-            self.send_numeric_reply(
-                NumericReply::RplInviting,
-                format!("{} {}", user, target).to_string(),
-            )
-            .await;
-        }
+        self.server.invite_channel(self, &target, &user).await;
     }
 
     async fn on_kick(&self, message: Message) {
@@ -789,7 +786,7 @@ impl Client {
                 _ => {
                     if self.server.is_nick_mapped(target).await {
                         self.server
-                            .forward_message(self.get_prefix().await, target, text.clone())
+                            .forward_message(self, target, text.clone())
                             .await;
                     } else {
                         self.send_numeric_reply(
@@ -909,6 +906,23 @@ impl Client {
                     .handle_user_mode(self, &target, message.params[1..].to_vec())
                     .await;
             }
+        }
+    }
+
+    async fn on_away(&self, message: Message) {
+        if message.params.len() > 0 {
+            (*self.away_message.lock().await) = message.params[0].to_string();
+            self.send_numeric_reply(
+                NumericReply::RplNowAway,
+                ":You have been marked as being away".to_string(),
+            )
+            .await;
+        } else {
+            self.send_numeric_reply(
+                NumericReply::RplUnAway,
+                ":You are no longer marked as being away".to_string(),
+            )
+            .await;
         }
     }
 
