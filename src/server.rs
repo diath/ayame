@@ -161,26 +161,43 @@ impl Server {
         }
     }
 
-    pub async fn forward_message(&self, sender: &Client, name: &str, message: String) {
+    pub async fn forward_message(
+        &self,
+        is_notice: bool,
+        sender: &Client,
+        name: &str,
+        message: String,
+    ) {
         if !self.clients.lock().await.contains_key(name) {
             panic!("forward_message()");
         }
 
         if let Some(client) = self.clients.lock().await.get(name) {
-            client
-                .send_raw(format!(
+            let message = if is_notice {
+                format!(
+                    ":{} NOTICE {} :{}",
+                    sender.get_prefix().await,
+                    name,
+                    message
+                )
+            } else {
+                format!(
                     ":{} PRIVMSG {} :{}",
                     sender.get_prefix().await,
                     name,
                     message
-                ))
-                .await;
+                )
+            };
 
-            let away = client.away_message.lock().await.to_string();
-            if away.len() > 0 {
-                sender
-                    .send_numeric_reply(NumericReply::RplAway, format!("{}: {}", name, away))
-                    .await;
+            client.send_raw(message).await;
+
+            if !is_notice {
+                let away = client.away_message.lock().await.to_string();
+                if away.len() > 0 {
+                    sender
+                        .send_numeric_reply(NumericReply::RplAway, format!("{}: {}", name, away))
+                        .await;
+                }
             }
         }
     }
@@ -469,7 +486,13 @@ impl Server {
         result
     }
 
-    pub async fn forward_channel_message(&self, client: &Client, name: &str, message: String) {
+    pub async fn forward_channel_message(
+        &self,
+        is_notice: bool,
+        client: &Client,
+        name: &str,
+        message: String,
+    ) {
         /* TODO(diath): This should broadcast user prefix and not nick. */
         if let Some(channel) = self
             .channels
@@ -507,7 +530,12 @@ impl Server {
 
             println!("[{}] {}: {}", name, prefix, message);
 
-            let message = format!(":{} PRIVMSG {} :{}", prefix, name, message);
+            let message = if is_notice {
+                format!(":{} NOTICE {} :{}", prefix, name, message)
+            } else {
+                format!(":{} PRIVMSG {} :{}", prefix, name, message)
+            };
+
             for target in channel.participants.read().await.keys() {
                 if let Some(client) = self.clients.lock().await.get(target) {
                     if client.get_prefix().await != prefix {

@@ -233,7 +233,10 @@ impl Client {
                 }
                 /* Sending Messages */
                 "PRIVMSG" => {
-                    self.on_privmsg(message).await;
+                    self.on_privmsg(message, false).await;
+                }
+                "NOTICE" => {
+                    self.on_privmsg(message, true).await;
                 }
                 /* Server Queries and Commands */
                 "MOTD" => {
@@ -741,7 +744,7 @@ impl Client {
         }
     }
 
-    async fn on_privmsg(&self, message: Message) {
+    async fn on_privmsg(&self, message: Message, is_notice: bool) {
         /* TODO(diath): ERR_NOTOPLEVEL, ERR_WILDTOPLEVEL, ERR_BADMASK */
         if message.params.len() < 1 {
             self.send_numeric_reply(
@@ -772,7 +775,7 @@ impl Client {
             match &target[0..1] {
                 "#" => {
                     self.server
-                        .forward_channel_message(self, target, text.clone())
+                        .forward_channel_message(is_notice, self, target, text.clone())
                         .await;
                 }
                 /* NOTE(diath): Technically a channel can be prefixed with either # (network), ! (safe), + (unmoderated) or & (local) but we only support #. */
@@ -786,7 +789,7 @@ impl Client {
                 _ => {
                     if self.server.is_nick_mapped(target).await {
                         self.server
-                            .forward_message(self, target, text.clone())
+                            .forward_message(is_notice, self, target, text.clone())
                             .await;
                     } else {
                         self.send_numeric_reply(
