@@ -140,7 +140,6 @@ impl Client {
         )
         .await;
 
-        /* TODO(diath): We should probably store software version somewhere. */
         self.send_numeric_reply(
             NumericReply::RplYourHost,
             format!(
@@ -415,9 +414,8 @@ impl Client {
     async fn on_join(&self, message: Message) {
         /* TODO(diath): ERR_TOOMANYTARGETS, ERR_BANNEDFROMCHAN, ERR_BADCHANMASK, ERR_TOOMANYCHANNELS, ERR_UNAVAILRESOURCE */
         if message.params[0] == "0" {
-            let nick = self.nick.lock().await.to_string();
             for channel in &*self.channels.lock().await {
-                self.server.part_channel(&channel, &nick, "Leaving").await;
+                self.server.part_channel(self, &channel, "Leaving").await;
             }
             self.channels.lock().await.clear();
         } else {
@@ -441,7 +439,7 @@ impl Client {
                 } else {
                     "".to_string()
                 };
-                if self.server.join_channel(target, password, self).await {
+                if self.server.join_channel(self, target, password).await {
                     self.channels.lock().await.insert(target.to_string());
 
                     /* NOTE(diath): This cannot be handled in Server::join_channel method or we will end up with a deadlock. */
@@ -490,7 +488,7 @@ impl Client {
                     continue;
                 }
 
-                if self.server.part_channel(target, &nick, &part_message).await {
+                if self.server.part_channel(self, target, &part_message).await {
                     self.channels.lock().await.remove(target);
                 }
             }
