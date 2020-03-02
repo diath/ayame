@@ -20,7 +20,7 @@ use tokio::sync::Mutex;
 
 pub struct Server {
     pub name: String,
-    pub created: String,
+    pub created: DateTime<Utc>,
     address: SocketAddr,
     clients: Mutex<HashMap<String, Arc<Client>>>,
     clients_pending: Mutex<Vec<Arc<Client>>>,
@@ -31,7 +31,6 @@ pub struct Server {
 
 impl Server {
     pub fn new() -> Server {
-        let dt = DateTime::<Utc>::from(SystemTime::now());
         let config = Server::load_config();
 
         let name = config.server.name.unwrap_or(IRCD_NAME.to_string());
@@ -44,7 +43,7 @@ impl Server {
 
         Server {
             name: name,
-            created: dt.format("%Y-%m-%d %H:%M:%S.%f").to_string(),
+            created: DateTime::<Utc>::from(SystemTime::now()),
             address: format!("{}:{}", host, port).parse().unwrap(),
             clients: Mutex::new(HashMap::new()),
             clients_pending: Mutex::new(vec![]),
@@ -978,5 +977,9 @@ impl Server {
         client
             .send_numeric_reply(NumericReply::RplUserHost, format!(":{}", result.join(" ")))
             .await;
+    }
+
+    pub async fn uptime(&self) -> i64 {
+        return (DateTime::<Utc>::from(SystemTime::now()) - self.created).num_seconds();
     }
 }
