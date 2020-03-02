@@ -152,7 +152,10 @@ impl Client {
         /* TODO(diath): We should probably store first startup time somewhere. */
         self.send_numeric_reply(
             NumericReply::RplCreated,
-            format!(":This server was created {}", self.server.created),
+            format!(
+                ":This server was created {}",
+                self.server.created.format("%Y-%m-%d %H:%M:%S.%f"),
+            ),
         )
         .await;
 
@@ -243,6 +246,9 @@ impl Client {
                 }
                 "VERSION" => {
                     self.on_version(message).await;
+                }
+                "STATS" => {
+                    self.on_stats(message).await;
                 }
                 "TIME" => {
                     self.on_time(message).await;
@@ -834,6 +840,44 @@ impl Client {
                 "{}-{}.0 {} :{}",
                 IRCD_NAME, IRCD_VERSION, self.server.name, IRCD_REPOSITORY
             ),
+        )
+        .await;
+    }
+
+    async fn on_stats(&self, message: Message) {
+        if message.params.len() < 1 {
+            self.send_numeric_reply(
+                NumericReply::ErrNeedMoreParams,
+                "STATS :Not enough parameters".to_string(),
+            )
+            .await;
+
+            return;
+        }
+
+        let query = message.params[0].as_str();
+        match query {
+            "u" => {
+                let uptime = self.server.uptime().await;
+
+                self.send_numeric_reply(
+                    NumericReply::RplStatsUptime,
+                    format!(
+                        ":Server Up {} days, {:02}:{:02}:{:02}",
+                        ((uptime / 86400) as f64).floor() as i64,
+                        ((uptime / 3600) as f64).floor() as i64 % 24,
+                        ((uptime / 60) as f64).floor() as i64 % 60,
+                        uptime % 60,
+                    ),
+                )
+                .await;
+            }
+            _ => {}
+        }
+
+        self.send_numeric_reply(
+            NumericReply::RplEndOfStats,
+            format!("{} :End of /STATS report", query),
         )
         .await;
     }
