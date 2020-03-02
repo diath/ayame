@@ -30,6 +30,7 @@ pub enum NumericReply {
     ErrNoSuchChannel = 403,
     ErrCannotSendToChan = 404,
     ErrTooManyTargets = 407,
+    ErrNoOrigin = 409,
     ErrNoRecipient = 411,
     ErrNoTextToSend = 412,
     ErrUnknownCommand = 421,
