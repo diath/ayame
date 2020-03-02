@@ -275,6 +275,9 @@ impl Client {
                 "MODE" => {
                     self.on_mode(message).await;
                 }
+                "PING" => {
+                    self.on_ping(message).await;
+                }
                 "AWAY" => {
                     self.on_away(message).await;
                 }
@@ -915,6 +918,34 @@ impl Client {
                     .await;
             }
         }
+    }
+
+    async fn on_ping(&self, message: Message) {
+        if message.params.len() < 1 {
+            self.send_numeric_reply(
+                NumericReply::ErrNoOrigin,
+                ":No origin specified".to_string(),
+            )
+            .await;
+            return;
+        }
+
+        if message.params.len() > 1 {
+            if self.server.name != message.params[1] {
+                self.send_numeric_reply(
+                    NumericReply::ErrNoSuchServer,
+                    format!("{} :No such server", message.params[1]),
+                )
+                .await;
+                return;
+            }
+        }
+
+        self.send_raw(format!(
+            ":{} PONG {} :{}",
+            self.server.name, self.server.name, message.params[0]
+        ))
+        .await;
     }
 
     async fn on_away(&self, message: Message) {
