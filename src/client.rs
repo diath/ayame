@@ -278,6 +278,9 @@ impl Client {
                 "AWAY" => {
                     self.on_away(message).await;
                 }
+                "USERHOST" => {
+                    self.on_userhost(message).await;
+                }
                 _ => {
                     self.send_numeric_reply(
                         NumericReply::ErrUnknownCommand,
@@ -926,6 +929,19 @@ impl Client {
             )
             .await;
         }
+    }
+
+    async fn on_userhost(&self, message: Message) {
+        if message.params.len() < 1 {
+            self.send_numeric_reply(
+                NumericReply::ErrNeedMoreParams,
+                "USERHOST :Not enough parameters".to_string(),
+            )
+            .await;
+            return;
+        }
+
+        self.server.handle_userhost(self, message.params).await;
     }
 
     fn is_nick_valid(nick: String) -> bool {
