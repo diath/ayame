@@ -251,22 +251,25 @@ impl Client {
                     self.on_rehash().await;
                 }
                 "DIE" | "RESTART" => {
-                    if *self.registered.lock().await {
-                        self.send_numeric_reply(
-                            NumericReply::ErrNoPrivileges,
-                            ":Permission Denied- You're not an IRC operator".to_string(),
-                        )
-                        .await;
-                    }
+                    self.send_numeric_reply(
+                        NumericReply::ErrNoPrivileges,
+                        ":Permission Denied- You're not an IRC operator".to_string(),
+                    )
+                    .await;
                 }
                 "SUMMON" => {
-                    if *self.registered.lock().await {
-                        self.send_numeric_reply(
-                            NumericReply::ErrSummonDisabled,
-                            ":SUMMON has been disabled".to_string(),
-                        )
-                        .await;
-                    }
+                    self.send_numeric_reply(
+                        NumericReply::ErrSummonDisabled,
+                        ":SUMMON has been disabled".to_string(),
+                    )
+                    .await;
+                }
+                "USERS" => {
+                    self.send_numeric_reply(
+                        NumericReply::ErrUsersDisabled,
+                        ":USERS has been disabled".to_string(),
+                    )
+                    .await;
                 }
                 /* Other */
                 "MODE" => {
@@ -276,13 +279,11 @@ impl Client {
                     self.on_away(message).await;
                 }
                 _ => {
-                    if *self.registered.lock().await {
-                        self.send_numeric_reply(
-                            NumericReply::ErrUnknownCommand,
-                            format!("{} :Unknown command", message.command),
-                        )
-                        .await;
-                    }
+                    self.send_numeric_reply(
+                        NumericReply::ErrUnknownCommand,
+                        format!("{} :Unknown command", message.command),
+                    )
+                    .await;
                     println!("Command {} not implemented.", message.command);
                 }
             }
