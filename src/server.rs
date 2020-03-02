@@ -92,6 +92,11 @@ impl Server {
 
     pub async fn accept(self) -> Result<(), Box<dyn std::error::Error>> {
         let server = Arc::new(self);
+        server
+            .operators
+            .lock()
+            .await
+            .insert("test".to_string(), "test".to_string());
         let mut acceptor = TcpListener::bind(server.address).await?;
         println!("Listening...");
 
@@ -942,5 +947,36 @@ impl Server {
                 )
                 .await;
         }
+    }
+
+    pub async fn handle_userhost(&self, client: &Client, params: Vec<String>) {
+        let mut result = vec![];
+        for param in params {
+            if let Some(other) = self.clients.lock().await.get(&param) {
+                let mut parts = vec![];
+
+                let nick = other.nick.lock().await.to_string();
+                parts.push(nick.clone());
+
+                if *other.operator.lock().await {
+                    parts.push("*".to_string());
+                }
+
+                parts.push("=".to_string());
+
+                if other.away_message.lock().await.to_string().len() > 0 {
+                    parts.push("+".to_string());
+                } else {
+                    parts.push("-".to_string());
+                }
+
+                parts.push(format!("{}@{}", &nick, other.host.lock().await.to_string()));
+                result.push(parts.join(""));
+            }
+        }
+
+        client
+            .send_numeric_reply(NumericReply::RplUserHost, format!(":{}", result.join(" ")))
+            .await;
     }
 }
