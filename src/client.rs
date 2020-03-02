@@ -281,6 +281,9 @@ impl Client {
                 "USERHOST" => {
                     self.on_userhost(message).await;
                 }
+                "ISON" => {
+                    self.on_ison(message).await;
+                }
                 _ => {
                     self.send_numeric_reply(
                         NumericReply::ErrUnknownCommand,
@@ -942,6 +945,27 @@ impl Client {
         }
 
         self.server.handle_userhost(self, message.params).await;
+    }
+
+    async fn on_ison(&self, message: Message) {
+        if message.params.len() < 1 {
+            self.send_numeric_reply(
+                NumericReply::ErrNeedMoreParams,
+                "ISON :Not enough parameters".to_string(),
+            )
+            .await;
+            return;
+        }
+
+        let mut nicks = vec![];
+        for param in message.params {
+            if self.server.is_nick_mapped(&param).await {
+                nicks.push(param);
+            }
+        }
+
+        self.send_numeric_reply(NumericReply::RplIsOn, format!(":{}", nicks.join(" ")))
+            .await;
     }
 
     fn is_nick_valid(nick: String) -> bool {

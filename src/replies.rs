@@ -5,6 +5,7 @@ pub enum NumericReply {
     RplUModeIs = 221,
     RplAway = 301,
     RplUserHost = 302,
+    RplIsOn = 303,
     RplUnAway = 305,
     RplNowAway = 306,
     RplListStart = 321,
