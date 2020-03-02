@@ -229,13 +229,17 @@ impl Server {
         false
     }
 
-    pub async fn join_channel(&self, name: &str, password: String, client: &Client) -> bool {
-        /* TODO(diath): This should broadcast user prefix and not nick. */
+    pub async fn join_channel(
+        &self,
+        client: &Client,
+        channel_name: &str,
+        password: String,
+    ) -> bool {
         if let Some(channel) = self
             .channels
             .lock()
             .await
-            .get(name.to_string().to_lowercase().as_str())
+            .get(channel_name.to_string().to_lowercase().as_str())
         {
             let oper = *client.operator.lock().await;
             let nick = client.nick.lock().await.to_string();
@@ -252,7 +256,7 @@ impl Server {
                     client
                         .send_numeric_reply(
                             NumericReply::ErrChannelIsFull,
-                            format!("{} :Cannot join channel (+l)", name).to_string(),
+                            format!("{} :Cannot join channel (+l)", channel_name).to_string(),
                         )
                         .await;
                     return false;
@@ -262,7 +266,7 @@ impl Server {
                     client
                         .send_numeric_reply(
                             NumericReply::ErrBadChannelKey,
-                            format!("{} :Cannot join channel (+k)", name).to_string(),
+                            format!("{} :Cannot join channel (+k)", channel_name).to_string(),
                         )
                         .await;
                     return false;
@@ -272,7 +276,7 @@ impl Server {
                     client
                         .send_numeric_reply(
                             NumericReply::ErrInviteOnlyChan,
-                            format!("{} :Cannot join channel (+i)", name).to_string(),
+                            format!("{} :Cannot join channel (+i)", channel_name).to_string(),
                         )
                         .await;
                     return false;
@@ -295,7 +299,7 @@ impl Server {
                 },
             );
 
-            let message = format!(":{} JOIN {}", nick, name);
+            let message = format!(":{} JOIN {}", client.get_prefix().await, channel_name);
             for target in participants.keys() {
                 if let Some(client) = self.clients.lock().await.get(target) {
                     client.send_raw(message.clone()).await;
@@ -309,26 +313,27 @@ impl Server {
                     client
                         .send_numeric_reply(
                             NumericReply::RplNoTopic,
-                            format!("{} :No topic is set", name).to_string(),
+                            format!("{} :No topic is set", channel_name).to_string(),
                         )
                         .await;
                 } else {
                     client
                         .send_numeric_reply(
                             NumericReply::RplTopic,
-                            format!("{} :{}", name, text).to_string(),
+                            format!("{} :{}", channel_name, text).to_string(),
                         )
                         .await;
 
                     client
                         .send_numeric_reply(
                             NumericReply::RplTopicSet,
-                            format!("{} {} {}", name, topic.set_by, topic.set_at).to_string(),
+                            format!("{} {} {}", channel_name, topic.set_by, topic.set_at)
+                                .to_string(),
                         )
                         .await;
                 }
 
-                println!("[{}] {} joined.", name, nick);
+                println!("[{}] {} joined.", channel_name, nick);
                 return true;
             }
         }
@@ -336,8 +341,12 @@ impl Server {
         false
     }
 
-    pub async fn part_channel(&self, name: &str, nick: &str, part_message: &str) -> bool {
-        /* TODO(diath): This should broadcast user prefix and not nick. */
+    pub async fn part_channel(
+        &self,
+        client: &Client,
+        channel_name: &str,
+        part_message: &str,
+    ) -> bool {
         let mut result = false;
         let mut remove = false;
 
@@ -345,10 +354,16 @@ impl Server {
             .channels
             .lock()
             .await
-            .get(name.to_string().to_lowercase().as_str())
+            .get(channel_name.to_string().to_lowercase().as_str())
         {
-            if channel.part(nick.to_string()).await {
-                let message = format!(":{} PART {} :{}", nick, name, part_message);
+            let nick = client.nick.lock().await.to_string();
+            if channel.part(nick).await {
+                let message = format!(
+                    ":{} PART {} :{}",
+                    client.get_prefix().await,
+                    channel_name,
+                    part_message
+                );
 
                 for target in channel.participants.read().await.keys() {
                     if let Some(client) = self.clients.lock().await.get(target) {
@@ -357,9 +372,7 @@ impl Server {
                 }
 
                 /* NOTE(diath): We need to send the confirmation to the sending client separately as they are no longer in the channel participant list. */
-                if let Some(client) = self.clients.lock().await.get(nick) {
-                    client.send_raw(message.clone()).await;
-                }
+                client.send_raw(message.clone()).await;
 
                 if channel.participants.read().await.len() == 0 {
                     remove = true;
@@ -373,7 +386,7 @@ impl Server {
             self.channels
                 .lock()
                 .await
-                .remove(name.to_string().to_lowercase().as_str());
+                .remove(channel_name.to_string().to_lowercase().as_str());
         }
 
         result
@@ -434,7 +447,6 @@ impl Server {
         kicked: &str,
         kick_message: String,
     ) -> bool {
-        /* TODO(diath): This should broadcast user prefix and not nick. */
         let mut result = false;
         let mut remove = false;
 
@@ -459,7 +471,10 @@ impl Server {
             if oper || nick == kicked.to_string() || channel.has_access(&nick, kicked).await {
                 let message = format!(
                     ":{} KICK {} {} :{}",
-                    nick, channel_name, kicked, kick_message
+                    client.get_prefix().await,
+                    channel_name,
+                    kicked,
+                    kick_message
                 );
                 for target in channel.participants.read().await.keys() {
                     if let Some(client) = self.clients.lock().await.get(target) {
@@ -493,7 +508,6 @@ impl Server {
         name: &str,
         message: String,
     ) {
-        /* TODO(diath): This should broadcast user prefix and not nick. */
         if let Some(channel) = self
             .channels
             .lock()
@@ -590,7 +604,6 @@ impl Server {
     }
 
     pub async fn set_channel_topic(&self, client: &Client, channel_name: &str, topic: String) {
-        /* TODO(diath): This should broadcast user prefix and not nick. */
         if let Some(channel) = self
             .channels
             .lock()
@@ -616,7 +629,12 @@ impl Server {
             // NOTE(diath): The topic sender should be just the name, not the prefix.
             channel.set_topic(nick.to_string(), topic.clone()).await;
 
-            let message = format!(":{} TOPIC {} :{}", nick, channel_name, topic);
+            let message = format!(
+                ":{} TOPIC {} :{}",
+                client.get_prefix().await,
+                channel_name,
+                topic
+            );
             for target in channel.participants.read().await.keys() {
                 if let Some(client) = self.clients.lock().await.get(target) {
                     if client.get_prefix().await != nick.to_string() {
