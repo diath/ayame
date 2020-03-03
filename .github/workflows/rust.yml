@@ -1,6 +1,10 @@
 name: Main
 
-on: [push, pull_request]
+on:
+  push:
+    branches:
+      -master
+  pull_request:
 
 jobs:
   rust:
@@ -12,4 +16,5 @@ jobs:
           components: rustfmt
           rust-version: stable
       - uses: actions/checkout@v1
-      - run: cargo fmt --all -- --check && cargo check --all
+      - run: cargo fmt --all -- --check
+      - run: cargo check --all
