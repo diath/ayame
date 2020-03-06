@@ -38,6 +38,7 @@ pub struct Channel {
     pub modes: Mutex<ChannelModes>,
     pub participants: RwLock<HashMap<String, ChannelUserModes>>,
     pub invites: Mutex<HashSet<String>>,
+    pub invite_exceptions: Mutex<HashSet<String>>,
     pub bans: Mutex<HashSet<String>>,
     pub ban_exceptions: Mutex<HashSet<String>>,
 }
@@ -114,6 +115,7 @@ impl Channel {
             }),
             participants: RwLock::new(HashMap::new()),
             invites: Mutex::new(HashSet::new()),
+            invite_exceptions: Mutex::new(HashSet::new()),
             bans: Mutex::new(HashSet::new()),
             ban_exceptions: Mutex::new(HashSet::new()),
         }
@@ -125,6 +127,10 @@ impl Channel {
 
     pub async fn is_invited(&self, name: &str) -> bool {
         self.invites.lock().await.contains(name)
+    }
+
+    pub async fn is_invite_exempt(&self, prefix: &str) -> bool {
+        self.invite_exceptions.lock().await.contains(prefix)
     }
 
     pub async fn is_banned(&self, prefix: &str) -> bool {
@@ -348,6 +354,27 @@ impl Channel {
                         } else {
                             if self.ban_exceptions.lock().await.remove(param) {
                                 changes.push('e');
+                                changes_params.push(param.to_string());
+                            }
+                        }
+                    }
+                    index += 1;
+                }
+                'I' => {
+                    if let Some(param) = params.get(index) {
+                        if flag {
+                            if self
+                                .invite_exceptions
+                                .lock()
+                                .await
+                                .insert(param.to_string())
+                            {
+                                changes.push('I');
+                                changes_params.push(param.to_string());
+                            }
+                        } else {
+                            if self.invite_exceptions.lock().await.remove(param) {
+                                changes.push('I');
                                 changes_params.push(param.to_string());
                             }
                         }
