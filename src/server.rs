@@ -286,7 +286,8 @@ impl Server {
                     return false;
                 }
 
-                if channel.is_banned(&client.get_prefix().await).await {
+                let prefix = client.get_prefix().await;
+                if channel.is_banned(&prefix).await && !channel.is_ban_exempt(&prefix).await {
                     client
                         .send_numeric_reply(
                             NumericReply::ErrBannedFromChan,
