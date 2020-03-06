@@ -1,4 +1,4 @@
-pub fn check_mask(mask: &str, value: String) -> bool {
+pub fn check_mask(mask: &str, value: &str) -> bool {
     /* NOTE(diath): Wildcard expression rules:
         A question mark matches any character exactly one time.
         An asterisk matches any character any number of times.
@@ -7,7 +7,7 @@ pub fn check_mask(mask: &str, value: String) -> bool {
     */
 
     /* TODO(diath): Add suport for *. */
-    let value = value.into_bytes();
+    let value = value.to_string().into_bytes();
     let mut index = 0 as usize;
     let mut escape = false;
 

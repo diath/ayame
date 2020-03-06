@@ -1,4 +1,5 @@
 use crate::client::Client;
+use crate::mask::check_mask;
 use crate::replies::NumericReply;
 
 use std::collections::{HashMap, HashSet};
@@ -130,15 +131,33 @@ impl Channel {
     }
 
     pub async fn is_invite_exempt(&self, prefix: &str) -> bool {
-        self.invite_exceptions.lock().await.contains(prefix)
+        for exception in &*self.invite_exceptions.lock().await {
+            if check_mask(exception, prefix) {
+                return true;
+            }
+        }
+
+        false
     }
 
     pub async fn is_banned(&self, prefix: &str) -> bool {
-        self.bans.lock().await.contains(prefix)
+        for ban in &*self.bans.lock().await {
+            if check_mask(ban, prefix) {
+                return true;
+            }
+        }
+
+        false
     }
 
     pub async fn is_ban_exempt(&self, prefix: &str) -> bool {
-        self.ban_exceptions.lock().await.contains(prefix)
+        for exception in &*self.ban_exceptions.lock().await {
+            if check_mask(exception, prefix) {
+                return true;
+            }
+        }
+
+        false
     }
 
     pub async fn part(&self, name: String) -> bool {
