@@ -2,6 +2,7 @@ mod ayame;
 mod channel;
 mod client;
 mod config;
+mod mask;
 mod replies;
 mod server;
 
