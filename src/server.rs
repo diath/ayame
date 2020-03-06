@@ -276,7 +276,11 @@ impl Server {
                     return false;
                 }
 
-                if modes.invite_only && !channel.is_invited(&nick).await {
+                let prefix = client.get_prefix().await;
+                if modes.invite_only
+                    && !channel.is_invited(&nick).await
+                    && !channel.is_invite_exempt(&prefix).await
+                {
                     client
                         .send_numeric_reply(
                             NumericReply::ErrInviteOnlyChan,
@@ -286,7 +290,6 @@ impl Server {
                     return false;
                 }
 
-                let prefix = client.get_prefix().await;
                 if channel.is_banned(&prefix).await && !channel.is_ban_exempt(&prefix).await {
                     client
                         .send_numeric_reply(
