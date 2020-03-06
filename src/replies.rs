@@ -53,6 +53,7 @@ pub enum NumericReply {
     ErrChannelIsFull = 471,
     ErrUnknownMode = 472,
     ErrInviteOnlyChan = 473,
+    ErrBannedFromChan = 474,
     ErrBadChannelKey = 475,
     ErrNoPrivileges = 481,
     ErrChanOpPrivsNeeded = 482,
