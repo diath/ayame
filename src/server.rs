@@ -285,6 +285,16 @@ impl Server {
                         .await;
                     return false;
                 }
+
+                if channel.is_banned(&client.get_prefix().await).await {
+                    client
+                        .send_numeric_reply(
+                            NumericReply::ErrBannedFromChan,
+                            format!("{} :Cannot join channel (+b)", channel_name).to_string(),
+                        )
+                        .await;
+                    return false;
+                }
             }
 
             let mut operator = false;

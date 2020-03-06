@@ -428,7 +428,7 @@ impl Client {
     }
 
     async fn on_join(&self, message: Message) {
-        /* TODO(diath): ERR_TOOMANYTARGETS, ERR_BANNEDFROMCHAN, ERR_BADCHANMASK, ERR_TOOMANYCHANNELS, ERR_UNAVAILRESOURCE */
+        /* TODO(diath): ERR_TOOMANYTARGETS, ERR_BADCHANMASK, ERR_TOOMANYCHANNELS, ERR_UNAVAILRESOURCE */
         if message.params[0] == "0" {
             for channel in &*self.channels.lock().await {
                 self.server.part_channel(self, &channel, "Leaving").await;
