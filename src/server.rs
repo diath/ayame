@@ -41,13 +41,24 @@ impl Server {
         println!("Server: {}", name);
         println!("Address: {}:{}", host, port);
 
+        let mut operators = HashMap::new();
+        if let Some(opers) = config.oper {
+            for oper in opers {
+                if oper.name.is_none() || oper.password.is_none() {
+                    continue;
+                }
+
+                operators.insert(oper.name.unwrap(), oper.password.unwrap());
+            }
+        }
+
         Server {
             name: name,
             created: DateTime::<Utc>::from(SystemTime::now()),
             address: format!("{}:{}", host, port).parse().unwrap(),
             clients: Mutex::new(HashMap::new()),
             clients_pending: Mutex::new(vec![]),
-            operators: Mutex::new(HashMap::new()),
+            operators: Mutex::new(operators),
             channels: Mutex::new(HashMap::new()),
             motd: Mutex::new(Server::load_motd(&motd_path)),
         }
