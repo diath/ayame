@@ -18,6 +18,8 @@ use chrono::Utc;
 use tokio::net::TcpListener;
 use tokio::sync::Mutex;
 
+use log;
+
 pub struct Server {
     pub name: String,
     pub created: DateTime<Utc>,
@@ -38,8 +40,8 @@ impl Server {
         let host = config.server.host.unwrap_or("127.0.0.1".to_string());
         let port = config.server.port.unwrap_or(6667);
 
-        println!("Server: {}", name);
-        println!("Address: {}:{}", host, port);
+        log::info!("Server: {}", name);
+        log::info!("Address: {}:{}", host, port);
 
         let mut operators = HashMap::new();
         if let Some(opers) = config.oper {
@@ -51,6 +53,7 @@ impl Server {
                 operators.insert(oper.name.unwrap(), oper.password.unwrap());
             }
         }
+        log::info!("Loaded {} operators.", operators.len());
 
         Server {
             name: name,
@@ -69,7 +72,7 @@ impl Server {
             Ok(s) => match toml::from_str(&s) {
                 Ok(config) => config,
                 Err(error) => {
-                    eprintln!("Config parse error: {}", error);
+                    log::warn!("Config parse error: {}", error);
                     Config {
                         ..Default::default()
                     }
@@ -102,19 +105,14 @@ impl Server {
 
     pub async fn accept(self) -> Result<(), Box<dyn std::error::Error>> {
         let server = Arc::new(self);
-        server
-            .operators
-            .lock()
-            .await
-            .insert("test".to_string(), "test".to_string());
         let mut acceptor = TcpListener::bind(server.address).await?;
-        println!("Listening...");
+        log::info!("Listening...");
 
         loop {
             let (stream, addr) = acceptor.accept().await?;
             let client = Arc::new(Client::new(server.clone(), addr));
 
-            println!("Client connected ({}).", addr);
+            log::debug!("Client connected ({}).", addr);
             let c = Mutex::new(client.clone());
             tokio::spawn(async move {
                 c.lock().await.task(stream).await;
@@ -188,6 +186,22 @@ impl Server {
         }
 
         if let Some(client) = self.clients.lock().await.get(name) {
+            if is_notice {
+                log::debug!(
+                    "[NOTICE {} -> {}] {}",
+                    sender.nick.lock().await.to_string(),
+                    name,
+                    message
+                );
+            } else {
+                log::debug!(
+                    "[PRIVMSG {} -> {}] {}",
+                    sender.nick.lock().await.to_string(),
+                    name,
+                    message
+                );
+            }
+
             let message = if is_notice {
                 format!(
                     ":{} NOTICE {} :{}",
@@ -225,6 +239,8 @@ impl Server {
     }
 
     pub async fn create_channel(&self, name: &str) {
+        log::debug!("[{}] Channel created.", name);
+
         self.channels.lock().await.insert(
             name.to_string().to_lowercase(),
             Channel::new(name.to_string().to_lowercase()),
@@ -362,7 +378,7 @@ impl Server {
                         .await;
                 }
 
-                println!("[{}] {} joined.", channel_name, nick);
+                log::debug!("[{}] {} joined.", channel_name, nick);
                 return true;
             }
         }
@@ -571,7 +587,7 @@ impl Server {
                 }
             }
 
-            println!("[{}] {}: {}", name, prefix, message);
+            log::debug!("[{}] {}: {}", name, prefix, message);
 
             let message = if is_notice {
                 format!(":{} NOTICE {} :{}", prefix, name, message)
@@ -654,7 +670,7 @@ impl Server {
                 return;
             }
 
-            println!("[{}] {} changed topic to {}", channel_name, nick, topic);
+            log::debug!("[{}] {} changed topic to {}", channel_name, nick, topic);
             // NOTE(diath): The topic sender should be just the name, not the prefix.
             channel.set_topic(nick.to_string(), topic.clone()).await;
 
@@ -910,6 +926,8 @@ impl Server {
                         for target in channel.participants.read().await.keys() {
                             targets.insert(target.clone());
                         }
+
+                        log::debug!("[{}] Mode {}.", channel_name, changes);
 
                         let message = format!(
                             ":{} MODE {} {}",
