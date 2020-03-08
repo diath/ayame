@@ -6,6 +6,8 @@ use std::collections::{HashMap, HashSet};
 use std::fmt::Write;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use log;
+
 use tokio::sync::{Mutex, RwLock};
 
 #[derive(Default)]
@@ -163,7 +165,7 @@ impl Channel {
     pub async fn part(&self, name: String) -> bool {
         if self.has_participant(name.as_str()).await {
             self.participants.write().await.remove(&name);
-            println!("[{}] {} left.", self.name, name.clone());
+            log::debug!("[{}] {} left.", self.name, name.clone());
             return true;
         }
 

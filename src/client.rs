@@ -11,6 +11,8 @@ use std::time::SystemTime;
 use chrono::prelude::DateTime;
 use chrono::Utc;
 
+use log;
+
 use tokio::io::{split, AsyncBufReadExt, AsyncWriteExt, BufReader, WriteHalf};
 use tokio::net::TcpStream;
 use tokio::sync::Mutex;
@@ -77,7 +79,7 @@ impl Client {
                     } else {
                         let result = self.parser.lock().await.parse(line.clone());
                         if result.is_none() {
-                            println!("Client parse error.");
+                            log::debug!("Client parse error.");
                             break;
                         }
                         self.on_message(result.unwrap()).await;
@@ -86,7 +88,7 @@ impl Client {
                 Err(err) => {
                     if err.kind() != ErrorKind::InvalidData {
                         self.server.broadcast_quit(&self, "Read Error").await;
-                        eprintln!("Client read error ({}).", err);
+                        log::debug!("Client read error ({}).", err);
                         break;
                     }
                 }
@@ -104,7 +106,7 @@ impl Client {
 
         self.server.unmap_client(&self).await;
 
-        println!("Client disconnected ({}).", self.address);
+        log::debug!("Client disconnected ({}).", self.address);
     }
 
     pub async fn send_raw(&self, message: String) {
@@ -115,7 +117,7 @@ impl Client {
             {
                 Ok(_) => {}
                 Err(_) => {
-                    println!("Failed to write message ({})", message);
+                    log::debug!("Failed to write message ({})", message);
                 }
             }
         }
@@ -164,7 +166,7 @@ impl Client {
     }
 
     async fn on_message(&self, message: Message) {
-        println!("Received message: {}", message);
+        log::debug!("Received message: {}", message);
 
         let registered = *self.registered.lock().await;
         if !registered {
@@ -299,14 +301,14 @@ impl Client {
                         format!("{} :Unknown command", message.command),
                     )
                     .await;
-                    println!("Command {} not implemented.", message.command);
+                    log::debug!("Command {} not implemented.", message.command);
                 }
             }
         }
     }
 
     fn on_cap(&self, _message: Message) {
-        println!("Ignoring CAP command (IRCv3)");
+        log::debug!("Ignoring CAP command (IRCv3)");
     }
 
     async fn on_pass(&self, message: Message) {
