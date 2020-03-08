@@ -278,7 +278,7 @@ impl Channel {
                 'k' => {
                     if flag {
                         if let Some(param) = params.get(index) {
-                            if self.modes.lock().await.password.to_string().len() > 0 {
+                            if modes.password.to_string().len() > 0 {
                                 client
                                     .send_numeric_reply(
                                         NumericReply::ErrKeySet,
