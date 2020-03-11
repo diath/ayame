@@ -420,7 +420,7 @@ impl Channel {
                     client
                         .send_numeric_reply(
                             NumericReply::ErrUnknownMode,
-                            format!("{} :Unknown mode", ch),
+                            format!("{} :Unknown MODE flag", ch),
                         )
                         .await;
                 }
