@@ -966,11 +966,23 @@ impl Server {
             let nick = client.nick.lock().await.to_string();
             if &nick == target_nick {
                 if params.len() > 0 {
-                    /* TODO(diath): Set user mode. */
+                    let changes = client.toggle_modes(params).await;
+                    if changes.len() > 0 {
+                        client
+                            .send_raw(format!(
+                                ":{} MODE {} :{}",
+                                self.name,
+                                client.nick.lock().await.to_string(),
+                                changes
+                            ))
+                            .await;
+                    }
                 } else {
-                    /* TODO(diath): Send user mode. */
                     client
-                        .send_numeric_reply(NumericReply::RplUModeIs, "".to_string())
+                        .send_numeric_reply(
+                            NumericReply::RplUModeIs,
+                            client.get_modes_description().await,
+                        )
                         .await;
                 }
             } else {

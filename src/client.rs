@@ -3,6 +3,7 @@ use crate::replies::NumericReply;
 use crate::server::Server;
 
 use std::collections::HashSet;
+use std::fmt::Write;
 use std::io::ErrorKind;
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -163,6 +164,57 @@ impl Client {
 
         self.server.send_motd(&self).await;
         /* TODO(diath): Send RPL_MYINFO with <servername> <version> <user modes> <server modes>. */
+    }
+
+    pub async fn get_modes_description(&self) -> String {
+        let mut desc = "+".to_string();
+
+        if *self.operator.lock().await {
+            write!(desc, "oO").expect("");
+        }
+
+        if self.away_message.lock().await.to_string().len() > 0 {
+            write!(desc, "a").expect("");
+        }
+
+        return desc;
+    }
+
+    pub async fn toggle_modes(&self, params: Vec<String>) -> String {
+        if params.len() < 1 {
+            panic!("toggle_modes()");
+        }
+
+        let mut flag = false;
+        let mut changes = String::new();
+
+        for ch in params[0].chars() {
+            match ch {
+                '+' => {
+                    flag = true;
+                    changes.push('+');
+                }
+                '-' => {
+                    flag = false;
+                    changes.push('-');
+                }
+                'o' | 'O' => {
+                    if !flag {
+                        (*self.operator.lock().await) = false;
+                        changes.push(ch);
+                    }
+                }
+                _ => {
+                    self.send_numeric_reply(
+                        NumericReply::ErrUnknownMode,
+                        format!("{} :Unknown MODE flag", ch),
+                    )
+                    .await;
+                }
+            }
+        }
+
+        changes
     }
 
     async fn on_message(&self, message: Message) {
