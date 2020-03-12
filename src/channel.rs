@@ -362,6 +362,21 @@ impl Channel {
                                 changes_params.push(param.to_string());
                             }
                         }
+                    } else {
+                        for ban in &*self.bans.lock().await {
+                            client
+                                .send_numeric_reply(
+                                    NumericReply::RplBanList,
+                                    format!("{} {}", self.name, ban),
+                                )
+                                .await;
+                        }
+                        client
+                            .send_numeric_reply(
+                                NumericReply::RplEndOfBanList,
+                                format!("{} :End of Channel Ban List", self.name),
+                            )
+                            .await;
                     }
                     index += 1;
                 }
@@ -378,6 +393,21 @@ impl Channel {
                                 changes_params.push(param.to_string());
                             }
                         }
+                    } else {
+                        for exception in &*self.ban_exceptions.lock().await {
+                            client
+                                .send_numeric_reply(
+                                    NumericReply::RplExceptionList,
+                                    format!("{} {}", self.name, exception),
+                                )
+                                .await;
+                        }
+                        client
+                            .send_numeric_reply(
+                                NumericReply::RplEndOfExceptionList,
+                                format!("{} :End of Channel Exception List", self.name),
+                            )
+                            .await;
                     }
                     index += 1;
                 }
@@ -399,6 +429,21 @@ impl Channel {
                                 changes_params.push(param.to_string());
                             }
                         }
+                    } else {
+                        for exception in &*self.invite_exceptions.lock().await {
+                            client
+                                .send_numeric_reply(
+                                    NumericReply::RplInviteList,
+                                    format!("{} {}", self.name, exception),
+                                )
+                                .await;
+                        }
+                        client
+                            .send_numeric_reply(
+                                NumericReply::RplEndOfInviteList,
+                                format!("{} :End of Channel Invite List", self.name),
+                            )
+                            .await;
                     }
                     index += 1;
                 }
