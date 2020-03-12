@@ -16,7 +16,8 @@ use log;
 
 use tokio::io::{split, AsyncBufReadExt, AsyncWriteExt, BufReader, WriteHalf};
 use tokio::net::TcpStream;
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, RwLock};
+use tokio::time::{delay_until, Duration, Instant};
 
 use ircmsgprs::parser::{Message, Parser};
 
@@ -26,7 +27,7 @@ pub struct Client {
     pub host: Mutex<String>,
     pub real_name: Mutex<String>,
     pub password: Mutex<String>,
-    pub registered: Mutex<bool>,
+    pub registered: RwLock<bool>,
     pub operator: Mutex<bool>,
     pub channels: Mutex<HashSet<String>>,
     pub away_message: Mutex<String>,
@@ -34,6 +35,7 @@ pub struct Client {
     address: SocketAddr,
     writer: Mutex<Option<WriteHalf<TcpStream>>>,
     parser: Mutex<Parser>,
+    received_pong: RwLock<bool>,
 }
 
 impl Client {
@@ -44,7 +46,7 @@ impl Client {
             host: Mutex::new(address.ip().to_string()),
             real_name: Mutex::new(String::new()),
             password: Mutex::new(String::new()),
-            registered: Mutex::new(false),
+            registered: RwLock::new(false),
             operator: Mutex::new(false),
             channels: Mutex::new(HashSet::new()),
             away_message: Mutex::new(String::new()),
@@ -52,6 +54,7 @@ impl Client {
             address: address,
             writer: Mutex::new(None),
             parser: Mutex::new(Parser::new()),
+            received_pong: RwLock::new(true),
         }
     }
 
@@ -110,6 +113,28 @@ impl Client {
         log::debug!("Client disconnected ({}).", self.address);
     }
 
+    pub async fn task_ping(&self) {
+        loop {
+            if !*self.received_pong.read().await {
+                /* TODO(diath): We should probably also shutdown the reader somehow. */
+                if let Some(mut writer) = self.writer.lock().await.take() {
+                    writer.flush();
+                    writer.shutdown();
+                }
+
+                log::debug!("Client did not respond to ping ({}).", self.address);
+                break;
+            }
+
+            if *self.registered.read().await {
+                (*self.received_pong.write().await) = false;
+                self.send_raw(format!("PING :{}", self.server.name)).await;
+            }
+
+            delay_until(Instant::now() + Duration::from_millis(30 * 1000)).await;
+        }
+    }
+
     pub async fn send_raw(&self, message: String) {
         if let Some(writer) = &mut *self.writer.lock().await {
             match writer
@@ -134,7 +159,7 @@ impl Client {
     }
 
     pub async fn complete_registration(&self) {
-        (*self.registered.lock().await) = true;
+        (*self.registered.write().await) = true;
 
         let prefix = self.get_prefix().await;
         self.send_numeric_reply(
@@ -220,7 +245,7 @@ impl Client {
     async fn on_message(&self, message: Message) {
         log::debug!("Received message: {}", message);
 
-        let registered = *self.registered.lock().await;
+        let registered = *self.registered.read().await;
         if !registered {
             match message.command.as_str() {
                 /* Connection Registration */
@@ -338,6 +363,9 @@ impl Client {
                 "PING" => {
                     self.on_ping(message).await;
                 }
+                "PONG" => {
+                    self.on_pong(message).await;
+                }
                 "AWAY" => {
                     self.on_away(message).await;
                 }
@@ -370,7 +398,7 @@ impl Client {
                 "PASS :Not enough parameters".to_string(),
             )
             .await;
-        } else if (*self.nick.lock().await).len() > 0 || *self.registered.lock().await {
+        } else if (*self.nick.lock().await).len() > 0 || *self.registered.read().await {
             self.send_numeric_reply(
                 NumericReply::ErrAlreadyRegistered,
                 ":Unauthorized command (already registered)".to_string(),
@@ -402,7 +430,7 @@ impl Client {
                     if self.nick.lock().await.len() == 0 {
                         self.server.map_nick(nick.to_string(), &self).await;
 
-                        if !*self.registered.lock().await && self.user.lock().await.len() != 0 {
+                        if !*self.registered.read().await && self.user.lock().await.len() != 0 {
                             send_complete_registration = true;
                         }
                     } else {
@@ -427,7 +455,7 @@ impl Client {
     }
 
     async fn on_user(&self, message: Message) {
-        if *self.registered.lock().await {
+        if *self.registered.read().await {
             self.send_numeric_reply(
                 NumericReply::ErrAlreadyRegistered,
                 ":Unauthorized command (already registered)".to_string(),
@@ -1044,6 +1072,30 @@ impl Client {
             self.server.name, self.server.name, message.params[0]
         ))
         .await;
+    }
+
+    async fn on_pong(&self, message: Message) {
+        if message.params.len() < 1 {
+            self.send_numeric_reply(
+                NumericReply::ErrNoOrigin,
+                ":No origin specified".to_string(),
+            )
+            .await;
+            return;
+        }
+
+        if message.params.len() > 1 {
+            if self.server.name != message.params[1] {
+                self.send_numeric_reply(
+                    NumericReply::ErrNoSuchServer,
+                    format!("{} :No such server", message.params[1]),
+                )
+                .await;
+                return;
+            }
+        }
+
+        (*self.received_pong.write().await) = true;
     }
 
     async fn on_away(&self, message: Message) {

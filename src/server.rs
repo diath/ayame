@@ -118,6 +118,11 @@ impl Server {
                 c.lock().await.task(stream).await;
             });
 
+            let c2 = Mutex::new(client.clone());
+            tokio::spawn(async move {
+                c2.lock().await.task_ping().await;
+            });
+
             server.clients_pending.lock().await.push(client.clone());
         }
     }
