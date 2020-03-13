@@ -1029,7 +1029,7 @@ impl Server {
                     parts.push("-".to_string());
                 }
 
-                parts.push(format!("{}@{}", &nick, other.host.lock().await.to_string()));
+                parts.push(format!("{}@{}", &nick, other.get_host().await));
                 result.push(parts.join(""));
             }
         }

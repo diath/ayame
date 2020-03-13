@@ -21,10 +21,16 @@ use tokio::time::{delay_until, Duration, Instant};
 
 use ircmsgprs::parser::{Message, Parser};
 
+pub enum UserHost {
+    IPv4(String),
+    IPv6(String),
+    VHost(String),
+}
+
 pub struct Client {
     pub nick: Mutex<String>,
     pub user: Mutex<String>,
-    pub host: Mutex<String>,
+    pub host: Mutex<UserHost>,
     pub real_name: Mutex<String>,
     pub password: Mutex<String>,
     pub registered: RwLock<bool>,
@@ -40,10 +46,15 @@ pub struct Client {
 
 impl Client {
     pub fn new(server: Arc<Server>, address: SocketAddr) -> Client {
+        let host = match address {
+            SocketAddr::V4(addr) => UserHost::IPv4(addr.ip().to_string()),
+            SocketAddr::V6(addr) => UserHost::IPv6(addr.ip().to_string()),
+        };
+
         Client {
             nick: Mutex::new(String::new()),
             user: Mutex::new(String::new()),
-            host: Mutex::new(address.ip().to_string()),
+            host: Mutex::new(host),
             real_name: Mutex::new(String::new()),
             password: Mutex::new(String::new()),
             registered: RwLock::new(false),
@@ -63,8 +74,16 @@ impl Client {
             "{}!{}@{}",
             self.nick.lock().await.to_string(),
             self.user.lock().await.to_string(),
-            self.host.lock().await.to_string()
+            self.get_host().await
         );
+    }
+
+    pub async fn get_host(&self) -> String {
+        match &*self.host.lock().await {
+            UserHost::IPv4(host) => host.to_string(),
+            UserHost::IPv6(host) => host.to_string(),
+            UserHost::VHost(host) => host.to_string(),
+        }
     }
 
     pub async fn task(&self, stream: TcpStream) {
@@ -202,6 +221,13 @@ impl Client {
             write!(desc, "a").expect("");
         }
 
+        match &*self.host.lock().await {
+            UserHost::VHost(_) => {
+                write!(desc, "x").expect("");
+            }
+            _ => {}
+        }
+
         return desc;
     }
 
@@ -227,6 +253,16 @@ impl Client {
                     if !flag {
                         (*self.operator.lock().await) = false;
                         changes.push(ch);
+                    }
+                }
+                'x' => {
+                    if !flag {
+                        (*self.host.lock().await) = match self.address {
+                            SocketAddr::V4(addr) => UserHost::IPv4(addr.ip().to_string()),
+                            SocketAddr::V6(addr) => UserHost::IPv6(addr.ip().to_string()),
+                        };
+                    } else {
+                        // TODO(diath): Apply default cloak?
                     }
                 }
                 _ => {
@@ -682,7 +718,6 @@ impl Client {
     }
 
     async fn on_invite(&self, message: Message) {
-        /* TODO(diath): RPL_AWAY. */
         if message.params.len() < 2 {
             self.send_numeric_reply(
                 NumericReply::ErrNeedMoreParams,
