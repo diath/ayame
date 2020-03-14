@@ -19,7 +19,7 @@ fn get_cloaked_host_ipv4(host: String) -> String {
 
     chunks.remove(chunks.len() - 1);
 
-    let mut result: Vec<String> = vec![];
+    let mut result = vec![];
     for chunk in chunks {
         let mut hasher = Sha1::new();
         hasher.input_str(chunk);
@@ -38,7 +38,7 @@ fn get_cloaked_host_ipv6(host: String) -> String {
 
     chunks.remove(chunks.len() - 1);
 
-    let mut result: Vec<String> = vec![];
+    let mut result = vec![];
     for chunk in chunks {
         if chunk.len() == 0 {
             result.push("".to_string());
