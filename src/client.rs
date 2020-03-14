@@ -1,4 +1,5 @@
 use crate::ayame::*;
+use crate::cloak::get_cloaked_host;
 use crate::replies::NumericReply;
 use crate::server::Server;
 
@@ -54,7 +55,7 @@ impl Client {
         Client {
             nick: Mutex::new(String::new()),
             user: Mutex::new(String::new()),
-            host: Mutex::new(host),
+            host: Mutex::new(UserHost::VHost(get_cloaked_host(host))),
             real_name: Mutex::new(String::new()),
             password: Mutex::new(String::new()),
             registered: RwLock::new(false),
@@ -256,13 +257,19 @@ impl Client {
                     }
                 }
                 'x' => {
-                    if !flag {
+                    if flag {
+                        /* NOTE(diath): This is a bit ugly but we need a copy to prevent a deadlock. */
+                        let host = match &*self.host.lock().await {
+                            UserHost::IPv4(host) => UserHost::IPv4(host.to_string()),
+                            UserHost::IPv6(host) => UserHost::IPv6(host.to_string()),
+                            UserHost::VHost(host) => UserHost::VHost(host.to_string()),
+                        };
+                        (*self.host.lock().await) = UserHost::VHost(get_cloaked_host(host));
+                    } else {
                         (*self.host.lock().await) = match self.address {
                             SocketAddr::V4(addr) => UserHost::IPv4(addr.ip().to_string()),
                             SocketAddr::V6(addr) => UserHost::IPv6(addr.ip().to_string()),
                         };
-                    } else {
-                        // TODO(diath): Apply default cloak?
                     }
                 }
                 _ => {

@@ -1,6 +1,7 @@
 mod ayame;
 mod channel;
 mod client;
+mod cloak;
 mod config;
 mod mask;
 mod replies;
