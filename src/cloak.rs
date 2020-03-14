@@ -3,7 +3,7 @@ use crate::client::UserHost;
 use crypto::digest::Digest;
 use crypto::sha1::Sha1;
 
-pub fn get_cloaked_host(host: &UserHost) -> String {
+pub fn get_cloaked_host(host: UserHost) -> String {
     match host {
         UserHost::IPv4(s) => get_cloaked_host_ipv4(s.to_string()),
         UserHost::IPv6(s) => get_cloaked_host_ipv6(s.to_string()),
