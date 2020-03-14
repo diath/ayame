@@ -1,4 +1,5 @@
 use crate::ayame::*;
+use crate::cloak::get_cloaked_host;
 use crate::replies::NumericReply;
 use crate::server::Server;
 
@@ -54,7 +55,7 @@ impl Client {
         Client {
             nick: Mutex::new(String::new()),
             user: Mutex::new(String::new()),
-            host: Mutex::new(host),
+            host: Mutex::new(UserHost::VHost(get_cloaked_host(&host))),
             real_name: Mutex::new(String::new()),
             password: Mutex::new(String::new()),
             registered: RwLock::new(false),
@@ -262,7 +263,8 @@ impl Client {
                             SocketAddr::V6(addr) => UserHost::IPv6(addr.ip().to_string()),
                         };
                     } else {
-                        // TODO(diath): Apply default cloak?
+                        let host = self.host.lock().await;
+                        (*self.host.lock().await) = UserHost::VHost(get_cloaked_host(&host));
                     }
                 }
                 _ => {
