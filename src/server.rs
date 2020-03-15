@@ -145,13 +145,36 @@ impl Server {
         self.clients.lock().await.insert(nick, c);
     }
 
-    pub async fn remap_nick(&self, old_nick: String, nick: String) {
+    pub async fn remap_nick(&self, prefix: String, old_nick: String, nick: String) {
         if !self.clients.lock().await.contains_key(&old_nick) {
             panic!("remap_nick()");
         }
 
-        if let Some(client) = self.clients.lock().await.remove(&old_nick) {
-            self.clients.lock().await.insert(nick, client);
+        let message = format!(":{} NICK :{}", prefix, nick);
+        let mut targets = HashSet::new();
+
+        /* NOTE(diath): We need to notify the sending client of the nick change. */
+        targets.insert(old_nick.clone());
+
+        if let Some(client) = self.clients.lock().await.get(&old_nick) {
+            for channel_name in &*client.channels.lock().await {
+                if let Some(channel) = self.channels.lock().await.get(channel_name) {
+                    for target in &*channel.participants.lock().await {
+                        targets.insert(target.clone());
+                    }
+                }
+            }
+        }
+
+        for target in targets {
+            if let Some(client) = self.clients.lock().await.get(&target) {
+                client.send_raw(message.clone()).await;
+            }
+        }
+
+        let client = self.clients.lock().await.remove(&old_nick);
+        if client.is_some() {
+            self.clients.lock().await.insert(nick, client.unwrap());
         }
     }
 
