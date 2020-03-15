@@ -834,6 +834,90 @@ impl Server {
         }
     }
 
+    pub async fn send_who_entry(
+        &self,
+        channel: Option<&Channel>,
+        channel_name: String,
+        client: &Client,
+        participant: &Client,
+    ) {
+        let user = participant.user.lock().await.to_string();
+        let host = participant.get_host().await;
+        let nick = participant.nick.lock().await.to_string();
+        let real_name = participant.real_name.lock().await.to_string();
+
+        /* NOTE(diath): Who flags:
+            - H and G indicate away status (H for here, G for gone).
+            - * indicates server operator.
+            - @ and + indicate channel operator and voice respectively.
+        */
+        let mut flags = "".to_string();
+        let away_message = participant.away_message.lock().await.to_string();
+        if away_message.len() == 0 {
+            flags.push('H');
+        } else {
+            flags.push('G');
+        }
+
+        if *participant.operator.lock().await {
+            flags.push('*');
+        }
+
+        if let Some(channel) = channel {
+            if channel.is_operator(&nick).await {
+                flags.push('@');
+            } else if channel.is_voiced(&nick).await {
+                flags.push('+');
+            }
+        }
+
+        if flags.len() > 0 {
+            flags.push(' ');
+        }
+
+        client
+            .send_numeric_reply(
+                NumericReply::RplWhoReply,
+                format!(
+                    "{} {} {} {} {} {}:0 {}",
+                    channel_name, user, host, self.name, nick, flags, real_name
+                ),
+            )
+            .await;
+    }
+
+    pub async fn send_who(&self, client: &Client, channel_name: String, operators_only: bool) {
+        if let Some(channel) = self.channels.lock().await.get(&channel_name) {
+            let nick = client.nick.lock().await.to_string();
+            let oper = *client.operator.lock().await;
+            if oper || channel.has_participant(&nick).await {
+                for target in channel.participants.read().await.keys() {
+                    if let Some(participant) = self.clients.lock().await.get(target) {
+                        let is_operator = channel.is_operator(&target).await;
+                        if operators_only && !is_operator {
+                            continue;
+                        }
+
+                        self.send_who_entry(
+                            Some(&channel),
+                            channel_name.to_string(),
+                            &client,
+                            &participant,
+                        )
+                        .await;
+                    }
+                }
+            }
+        }
+
+        client
+            .send_numeric_reply(
+                NumericReply::RplEndOfWho,
+                format!("{} :End of /WHO list.", channel_name),
+            )
+            .await;
+    }
+
     pub async fn broadcast_quit(&self, client: &Client, reason: &str) {
         let mut targets = HashSet::new();
 

@@ -399,6 +399,10 @@ impl Client {
                     )
                     .await;
                 }
+                /* User Based Queries */
+                "WHO" => {
+                    self.on_who(message).await;
+                }
                 /* Other */
                 "MODE" => {
                     self.on_mode(message).await;
@@ -1053,6 +1057,29 @@ impl Client {
         )
         .await;
         self.server.reload_motd().await;
+    }
+
+    async fn on_who(&self, message: Message) {
+        if message.params.len() < 1 {
+            self.server
+                .send_who_entry(None, "*".to_string(), self, self)
+                .await;
+
+            self.send_numeric_reply(
+                NumericReply::RplEndOfWho,
+                "* :End of /WHO list.".to_string(),
+            )
+            .await;
+        } else {
+            let mut operators_only = false;
+            if message.params.len() > 1 && message.params[1] == "o" {
+                operators_only = true;
+            }
+
+            self.server
+                .send_who(self, message.params[0].to_string(), operators_only)
+                .await;
+        }
     }
 
     async fn on_mode(&self, message: Message) {
