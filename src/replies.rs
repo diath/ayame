@@ -13,6 +13,7 @@ pub enum NumericReply {
     RplWhoisUser = 311,
     RplWhoisServer = 312,
     RplWhoisOperator = 313,
+    RplWhoisIdle = 317,
     RplEndOfWhois = 318,
     RplWhoisChannels = 319,
     RplEndOfWho = 315,
