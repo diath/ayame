@@ -223,6 +223,7 @@ impl Server {
                 )
             };
 
+            client.update_idle_time().await;
             client.send_raw(message).await;
 
             if !is_notice {
@@ -607,6 +608,8 @@ impl Server {
                     }
                 }
             }
+
+            client.update_idle_time().await;
         } else {
             client
                 .send_numeric_reply(
@@ -979,6 +982,13 @@ impl Server {
                         .await;
                 }
             }
+
+            client
+                .send_numeric_reply(
+                    NumericReply::RplWhoisIdle,
+                    format!("{} {} :seconds idle", nick, target.get_idle_time().await),
+                )
+                .await;
 
             client
                 .send_numeric_reply(

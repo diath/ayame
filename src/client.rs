@@ -38,6 +38,7 @@ pub struct Client {
     pub operator: Mutex<bool>,
     pub channels: Mutex<HashSet<String>>,
     pub away_message: Mutex<String>,
+    pub last_activity: RwLock<i64>,
     server: Arc<Server>,
     address: SocketAddr,
     writer: Mutex<Option<WriteHalf<TcpStream>>>,
@@ -62,6 +63,7 @@ impl Client {
             operator: Mutex::new(false),
             channels: Mutex::new(HashSet::new()),
             away_message: Mutex::new(String::new()),
+            last_activity: RwLock::new(0),
             server: server,
             address: address,
             writer: Mutex::new(None),
@@ -209,6 +211,8 @@ impl Client {
 
         self.server.send_motd(&self).await;
         /* TODO(diath): Send RPL_MYINFO with <servername> <version> <user modes> <server modes>. */
+
+        self.update_idle_time().await;
     }
 
     pub async fn get_modes_description(&self) -> String {
@@ -1249,6 +1253,14 @@ impl Client {
 
         self.send_numeric_reply(NumericReply::RplIsOn, format!(":{}", nicks.join(" ")))
             .await;
+    }
+
+    pub async fn get_idle_time(&self) -> i64 {
+        return Utc::now().timestamp() - *self.last_activity.read().await;
+    }
+
+    pub async fn update_idle_time(&self) {
+        (*self.last_activity.write().await) = Utc::now().timestamp();
     }
 
     fn is_nick_valid(nick: String) -> bool {
