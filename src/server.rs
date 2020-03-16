@@ -918,6 +918,74 @@ impl Server {
             .await;
     }
 
+    pub async fn send_whois(&self, client: &Client, target_nick: &str) {
+        if let Some(target) = self.clients.lock().await.get(target_nick) {
+            let nick = target.nick.lock().await.to_string();
+            let user = target.user.lock().await.to_string();
+            let host = target.get_host().await;
+            let real_name = target.real_name.lock().await.to_string();
+
+            client
+                .send_numeric_reply(
+                    NumericReply::RplWhoisUser,
+                    format!("{} {} {} * :{}", nick, user, host, real_name),
+                )
+                .await;
+
+            client
+                .send_numeric_reply(
+                    NumericReply::RplWhoisServer,
+                    format!("{} {} :{}", nick, self.name, IRCD_NAME),
+                )
+                .await;
+
+            if *target.operator.lock().await {
+                client
+                    .send_numeric_reply(
+                        NumericReply::RplWhoisOperator,
+                        format!("{} :is an IRC operator", nick),
+                    )
+                    .await;
+            }
+
+            if *client.operator.lock().await {
+                let mut channels = vec![];
+                for channel_name in &*target.channels.lock().await {
+                    if let Some(channel) = self.channels.lock().await.get(channel_name) {
+                        channels.push(format!(
+                            "{}{}",
+                            channel.get_participant_prefix(&nick).await,
+                            channel_name
+                        ));
+                    }
+                }
+
+                if channels.len() > 0 {
+                    client
+                        .send_numeric_reply(
+                            NumericReply::RplWhoisChannels,
+                            format!("{}", channels.join(" ")),
+                        )
+                        .await;
+                }
+            }
+
+            client
+                .send_numeric_reply(
+                    NumericReply::RplEndOfWhois,
+                    format!("{} :End of WHOIS list", nick),
+                )
+                .await;
+        } else {
+            client
+                .send_numeric_reply(
+                    NumericReply::ErrNoSuchNick,
+                    format!("{} :No such nick/channel", target_nick).to_string(),
+                )
+                .await;
+        }
+    }
+
     pub async fn broadcast_quit(&self, client: &Client, reason: &str) {
         let mut targets = HashSet::new();
 

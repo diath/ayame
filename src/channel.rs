@@ -594,4 +594,12 @@ impl Channel {
 
         false
     }
+
+    pub async fn get_participant_prefix(&self, nick: &str) -> String {
+        if let Some(modes) = self.participants.read().await.get(nick) {
+            return modes.get_prefix().to_string();
+        }
+
+        "".to_string()
+    }
 }
