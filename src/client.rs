@@ -403,6 +403,9 @@ impl Client {
                 "WHO" => {
                     self.on_who(message).await;
                 }
+                "WHOIS" => {
+                    self.on_whois(message).await;
+                }
                 /* Other */
                 "MODE" => {
                     self.on_mode(message).await;
@@ -1079,6 +1082,36 @@ impl Client {
             self.server
                 .send_who(self, message.params[0].to_string(), operators_only)
                 .await;
+        }
+    }
+
+    async fn on_whois(&self, message: Message) {
+        if message.params.len() < 1 {
+            self.send_numeric_reply(
+                NumericReply::ErrNoNicknameGiven,
+                ":No nickname given".to_string(),
+            )
+            .await;
+            return;
+        } else if message.params.len() > 1 {
+            if self.server.name != message.params[0] {
+                self.send_numeric_reply(
+                    NumericReply::ErrNoSuchServer,
+                    format!("{} :No such server", message.params[0]),
+                )
+                .await;
+                return;
+            }
+        }
+
+        let targets = if message.params.len() > 1 {
+            message.params[1].split(",")
+        } else {
+            message.params[0].split(",")
+        };
+
+        for target in targets {
+            self.server.send_whois(self, target).await;
         }
     }
 
