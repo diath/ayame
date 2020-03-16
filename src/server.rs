@@ -948,6 +948,16 @@ impl Server {
                     .await;
             }
 
+            let away_message = target.away_message.lock().await.to_string();
+            if away_message.len() > 0 {
+                client
+                    .send_numeric_reply(
+                        NumericReply::RplAway,
+                        format!("{} :{}", nick, away_message),
+                    )
+                    .await;
+            }
+
             if *client.operator.lock().await {
                 let mut channels = vec![];
                 for channel_name in &*target.channels.lock().await {
