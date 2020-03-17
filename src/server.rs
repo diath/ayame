@@ -4,6 +4,7 @@ use crate::client::Client;
 use crate::config::Config;
 use crate::replies::NumericReply;
 
+use std::cmp;
 use std::collections::{HashMap, HashSet};
 use std::fs::{read_to_string, File};
 use std::io::{BufRead, BufReader};
@@ -20,6 +21,14 @@ use tokio::sync::Mutex;
 
 use log;
 
+pub struct NickHistory {
+    pub nick: String,
+    pub user: String,
+    pub host: String,
+    pub real_name: String,
+    pub timestamp: i64,
+}
+
 pub struct Server {
     pub name: String,
     pub created: DateTime<Utc>,
@@ -29,6 +38,7 @@ pub struct Server {
     operators: Mutex<HashMap<String, String>>,
     channels: Mutex<HashMap<String, Channel>>,
     motd: Mutex<Option<Vec<String>>>,
+    nick_history: Mutex<HashMap<String, Vec<NickHistory>>>,
 }
 
 impl Server {
@@ -64,6 +74,7 @@ impl Server {
             operators: Mutex::new(operators),
             channels: Mutex::new(HashMap::new()),
             motd: Mutex::new(Server::load_motd(&motd_path)),
+            nick_history: Mutex::new(HashMap::new()),
         }
     }
 
@@ -1006,6 +1017,49 @@ impl Server {
         }
     }
 
+    pub async fn send_whowas(&self, client: &Client, target_nick: &str, limit: u32) {
+        if let Some(history) = self.nick_history.lock().await.get(target_nick) {
+            let mut start = 0;
+            if limit != 0 {
+                let offset = cmp::min(history.len(), limit as usize);
+                start = history.len() - offset;
+            }
+
+            for entry in history[start..].iter() {
+                client
+                    .send_numeric_reply(
+                        NumericReply::RplWhoWasUser,
+                        format!(
+                            "{} {} {} * :{}",
+                            entry.nick, entry.user, entry.host, entry.real_name
+                        ),
+                    )
+                    .await;
+
+                client
+                    .send_numeric_reply(
+                        NumericReply::RplWhoisServer,
+                        format!("{} {} :{}", target_nick, self.name, entry.timestamp),
+                    )
+                    .await;
+            }
+
+            client
+                .send_numeric_reply(
+                    NumericReply::RplEndOfWhowas,
+                    format!("{} :End of WHOWAS", target_nick),
+                )
+                .await;
+        } else {
+            client
+                .send_numeric_reply(
+                    NumericReply::ErrWasNoSuchNick,
+                    format!("{} :There was no such nickname", target_nick),
+                )
+                .await;
+        }
+    }
+
     pub async fn broadcast_quit(&self, client: &Client, reason: &str) {
         let mut targets = HashSet::new();
 
@@ -1213,5 +1267,26 @@ impl Server {
 
     pub async fn uptime(&self) -> i64 {
         return (DateTime::<Utc>::from(SystemTime::now()) - self.created).num_seconds();
+    }
+
+    pub async fn append_nick_history(&self, nick: String, client: &Client) {
+        let entry = NickHistory {
+            nick: nick.to_string(),
+            user: client.user.lock().await.to_string(),
+            host: client.get_host().await,
+            real_name: client.real_name.lock().await.to_string(),
+            timestamp: Utc::now().timestamp(),
+        };
+
+        if !self.nick_history.lock().await.contains_key(&nick) {
+            self.nick_history
+                .lock()
+                .await
+                .insert(nick.to_string(), vec![]);
+        }
+
+        if let Some(entries) = self.nick_history.lock().await.get_mut(&nick) {
+            entries.push(entry);
+        }
     }
 }

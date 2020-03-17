@@ -213,6 +213,9 @@ impl Client {
         /* TODO(diath): Send RPL_MYINFO with <servername> <version> <user modes> <server modes>. */
 
         self.update_idle_time().await;
+
+        let nick = self.nick.lock().await.to_string();
+        self.server.append_nick_history(nick, self).await;
     }
 
     pub async fn get_modes_description(&self) -> String {
@@ -410,6 +413,9 @@ impl Client {
                 "WHOIS" => {
                     self.on_whois(message).await;
                 }
+                "WHOWAS" => {
+                    self.on_whowas(message).await;
+                }
                 /* Other */
                 "MODE" => {
                     self.on_mode(message).await;
@@ -488,8 +494,12 @@ impl Client {
                             send_complete_registration = true;
                         }
                     } else {
+                        let old_nick = self.nick.lock().await.to_string();
                         self.server
-                            .remap_nick(self.nick.lock().await.to_string(), nick.to_string())
+                            .append_nick_history(old_nick.to_string(), self)
+                            .await;
+                        self.server
+                            .remap_nick(old_nick.to_string(), nick.to_string())
                             .await;
                     }
                     (*self.nick.lock().await) = nick.to_string();
@@ -1116,6 +1126,40 @@ impl Client {
 
         for target in targets {
             self.server.send_whois(self, target).await;
+        }
+    }
+
+    async fn on_whowas(&self, message: Message) {
+        if message.params.len() < 1 {
+            self.send_numeric_reply(
+                NumericReply::ErrNoNicknameGiven,
+                ":No nickname given".to_string(),
+            )
+            .await;
+            return;
+        }
+
+        if message.params.len() > 2 {
+            if self.server.name != message.params[2] {
+                self.send_numeric_reply(
+                    NumericReply::ErrNoSuchServer,
+                    format!("{} :No such server", message.params[1]),
+                )
+                .await;
+                return;
+            }
+        }
+
+        let mut limit = 0;
+        if message.params.len() > 1 {
+            match message.params[1].parse::<u32>() {
+                Ok(value) => limit = value,
+                Err(_) => {}
+            }
+        }
+
+        for target in message.params[0].split(",") {
+            self.server.send_whowas(self, target, limit).await;
         }
     }
 
