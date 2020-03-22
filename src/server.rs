@@ -161,8 +161,10 @@ impl Server {
             panic!("remap_nick()");
         }
 
-        if let Some(client) = self.clients.lock().await.remove(&old_nick) {
-            self.clients.lock().await.insert(nick, client);
+        // NOTE(diath): We cannot use the let Some idiom here or we will end up with a deadlock.
+        let client = self.clients.lock().await.remove(&old_nick);
+        if client.is_some() {
+            self.clients.lock().await.insert(nick, client.unwrap());
         }
     }
 
