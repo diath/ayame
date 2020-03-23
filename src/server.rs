@@ -522,7 +522,7 @@ impl Server {
         {
             let nick = client.nick.lock().await.to_string();
             let oper = *client.operator.lock().await;
-            if !oper && !channel.is_operator(&nick).await {
+            if !oper && !channel.is_half_operator(&nick).await {
                 client
                     .send_numeric_reply(
                         NumericReply::ErrChanOpPrivsNeeded,
@@ -1141,17 +1141,6 @@ impl Server {
                     .await;
             } else {
                 if oper || has_participant {
-                    if !oper && !channel.is_operator(&nick).await {
-                        client
-                            .send_numeric_reply(
-                                NumericReply::ErrChanOpPrivsNeeded,
-                                format!("{} :You're not channel operator", channel_name)
-                                    .to_string(),
-                            )
-                            .await;
-                        return;
-                    }
-
                     let changes = channel.toggle_modes(client, params).await;
                     if changes.len() > 0 {
                         let mut targets = HashSet::new();
