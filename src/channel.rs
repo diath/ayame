@@ -241,6 +241,9 @@ impl Channel {
             panic!("toggle_modes()");
         }
 
+        let nick = client.nick.lock().await.to_string();
+        let oper = *client.operator.lock().await;
+
         let mut modes = self.modes.lock().await;
 
         let chars = params[0].chars();
@@ -264,103 +267,176 @@ impl Channel {
                 }
                 /* Channel modes */
                 'm' => {
-                    if modes.moderated != flag {
-                        modes.moderated = flag;
-                        changes.push('m');
+                    if oper || self.is_half_operator(&nick).await {
+                        if modes.moderated != flag {
+                            modes.moderated = flag;
+                            changes.push('m');
+                        }
+                    } else {
+                        client
+                            .send_numeric_reply(
+                                NumericReply::ErrChanOpPrivsNeeded,
+                                format!("{} :You're not channel operator", self.name).to_string(),
+                            )
+                            .await;
                     }
                 }
                 'i' => {
-                    if modes.invite_only != flag {
-                        modes.invite_only = flag;
-                        changes.push('i');
+                    if oper || self.is_half_operator(&nick).await {
+                        if modes.invite_only != flag {
+                            modes.invite_only = flag;
+                            changes.push('i');
+                        }
+                    } else {
+                        client
+                            .send_numeric_reply(
+                                NumericReply::ErrChanOpPrivsNeeded,
+                                format!("{} :You're not channel operator", self.name).to_string(),
+                            )
+                            .await;
                     }
                 }
                 'k' => {
-                    if flag {
-                        if let Some(param) = params.get(index) {
-                            if modes.password.to_string().len() > 0 {
+                    if oper || self.is_half_operator(&nick).await {
+                        if flag {
+                            if let Some(param) = params.get(index) {
+                                if modes.password.to_string().len() > 0 {
+                                    client
+                                        .send_numeric_reply(
+                                            NumericReply::ErrKeySet,
+                                            format!("{} :Channel key already set", self.name),
+                                        )
+                                        .await;
+                                } else {
+                                    modes.password = param.to_string();
+                                    changes.push('k');
+                                    changes_params.push(param.to_string());
+                                }
+                            } else {
                                 client
                                     .send_numeric_reply(
-                                        NumericReply::ErrKeySet,
-                                        format!("{} :Channel key already set", self.name),
+                                        NumericReply::ErrNeedMoreParams,
+                                        "MODE :Not enough parameters".to_string(),
                                     )
                                     .await;
-                            } else {
-                                modes.password = param.to_string();
-                                changes.push('k');
-                                changes_params.push(param.to_string());
                             }
                         } else {
-                            client
-                                .send_numeric_reply(
-                                    NumericReply::ErrNeedMoreParams,
-                                    "MODE :Not enough parameters".to_string(),
-                                )
-                                .await;
+                            modes.password.clear();
+                            changes.push('k');
                         }
                     } else {
-                        modes.password.clear();
-                        changes.push('k');
+                        client
+                            .send_numeric_reply(
+                                NumericReply::ErrChanOpPrivsNeeded,
+                                format!("{} :You're not channel operator", self.name).to_string(),
+                            )
+                            .await;
                     }
                     index += 1;
                 }
                 'l' => {
-                    if flag {
-                        if let Some(param) = params.get(index) {
-                            let prev = modes.limit;
-                            match param.to_string().parse::<usize>() {
-                                Ok(limit) => modes.limit = limit,
-                                Err(_) => modes.limit = 0,
-                            }
+                    if oper || self.is_half_operator(&nick).await {
+                        if flag {
+                            if let Some(param) = params.get(index) {
+                                let prev = modes.limit;
+                                match param.to_string().parse::<usize>() {
+                                    Ok(limit) => modes.limit = limit,
+                                    Err(_) => modes.limit = 0,
+                                }
 
-                            if prev != modes.limit {
-                                changes.push('l');
-                                changes_params.push(modes.limit.to_string());
+                                if prev != modes.limit {
+                                    changes.push('l');
+                                    changes_params.push(modes.limit.to_string());
+                                }
+                            } else {
+                                client
+                                    .send_numeric_reply(
+                                        NumericReply::ErrNeedMoreParams,
+                                        "MODE :Not enough parameters".to_string(),
+                                    )
+                                    .await;
                             }
                         } else {
-                            client
-                                .send_numeric_reply(
-                                    NumericReply::ErrNeedMoreParams,
-                                    "MODE :Not enough parameters".to_string(),
-                                )
-                                .await;
+                            modes.limit = 0;
+                            changes.push('l');
                         }
                     } else {
-                        modes.limit = 0;
-                        changes.push('l');
+                        client
+                            .send_numeric_reply(
+                                NumericReply::ErrChanOpPrivsNeeded,
+                                format!("{} :You're not channel operator", self.name).to_string(),
+                            )
+                            .await;
                     }
                     index += 1;
                 }
                 'n' => {
-                    if modes.no_external_messages != flag {
-                        modes.no_external_messages = flag;
-                        changes.push('n');
+                    if oper || self.is_half_operator(&nick).await {
+                        if modes.no_external_messages != flag {
+                            modes.no_external_messages = flag;
+                            changes.push('n');
+                        }
+                    } else {
+                        client
+                            .send_numeric_reply(
+                                NumericReply::ErrChanOpPrivsNeeded,
+                                format!("{} :You're not channel operator", self.name).to_string(),
+                            )
+                            .await;
                     }
                 }
                 's' => {
-                    if modes.secret != flag {
-                        modes.secret = flag;
-                        changes.push('s');
+                    if oper || self.is_half_operator(&nick).await {
+                        if modes.secret != flag {
+                            modes.secret = flag;
+                            changes.push('s');
+                        }
+                    } else {
+                        client
+                            .send_numeric_reply(
+                                NumericReply::ErrChanOpPrivsNeeded,
+                                format!("{} :You're not channel operator", self.name).to_string(),
+                            )
+                            .await;
                     }
                 }
                 't' => {
-                    if modes.restrict_topic != flag {
-                        modes.restrict_topic = flag;
-                        changes.push('t');
+                    if oper || self.is_half_operator(&nick).await {
+                        if modes.restrict_topic != flag {
+                            modes.restrict_topic = flag;
+                            changes.push('t');
+                        }
+                    } else {
+                        client
+                            .send_numeric_reply(
+                                NumericReply::ErrChanOpPrivsNeeded,
+                                format!("{} :You're not channel operator", self.name).to_string(),
+                            )
+                            .await;
                     }
                 }
                 'b' => {
                     if let Some(param) = params.get(index) {
-                        if flag {
-                            if self.bans.lock().await.insert(param.to_string()) {
-                                changes.push('b');
-                                changes_params.push(param.to_string());
+                        if oper || self.is_half_operator(&nick).await {
+                            if flag {
+                                if self.bans.lock().await.insert(param.to_string()) {
+                                    changes.push('b');
+                                    changes_params.push(param.to_string());
+                                }
+                            } else {
+                                if self.bans.lock().await.remove(param) {
+                                    changes.push('b');
+                                    changes_params.push(param.to_string());
+                                }
                             }
                         } else {
-                            if self.bans.lock().await.remove(param) {
-                                changes.push('b');
-                                changes_params.push(param.to_string());
-                            }
+                            client
+                                .send_numeric_reply(
+                                    NumericReply::ErrChanOpPrivsNeeded,
+                                    format!("{} :You're not channel operator", self.name)
+                                        .to_string(),
+                                )
+                                .await;
                         }
                     } else {
                         for ban in &*self.bans.lock().await {
@@ -382,16 +458,26 @@ impl Channel {
                 }
                 'e' => {
                     if let Some(param) = params.get(index) {
-                        if flag {
-                            if self.ban_exceptions.lock().await.insert(param.to_string()) {
-                                changes.push('e');
-                                changes_params.push(param.to_string());
+                        if oper || self.is_half_operator(&nick).await {
+                            if flag {
+                                if self.ban_exceptions.lock().await.insert(param.to_string()) {
+                                    changes.push('e');
+                                    changes_params.push(param.to_string());
+                                }
+                            } else {
+                                if self.ban_exceptions.lock().await.remove(param) {
+                                    changes.push('e');
+                                    changes_params.push(param.to_string());
+                                }
                             }
                         } else {
-                            if self.ban_exceptions.lock().await.remove(param) {
-                                changes.push('e');
-                                changes_params.push(param.to_string());
-                            }
+                            client
+                                .send_numeric_reply(
+                                    NumericReply::ErrChanOpPrivsNeeded,
+                                    format!("{} :You're not channel operator", self.name)
+                                        .to_string(),
+                                )
+                                .await;
                         }
                     } else {
                         for exception in &*self.ban_exceptions.lock().await {
@@ -413,21 +499,31 @@ impl Channel {
                 }
                 'I' => {
                     if let Some(param) = params.get(index) {
-                        if flag {
-                            if self
-                                .invite_exceptions
-                                .lock()
-                                .await
-                                .insert(param.to_string())
-                            {
-                                changes.push('I');
-                                changes_params.push(param.to_string());
+                        if oper || self.is_half_operator(&nick).await {
+                            if flag {
+                                if self
+                                    .invite_exceptions
+                                    .lock()
+                                    .await
+                                    .insert(param.to_string())
+                                {
+                                    changes.push('I');
+                                    changes_params.push(param.to_string());
+                                }
+                            } else {
+                                if self.invite_exceptions.lock().await.remove(param) {
+                                    changes.push('I');
+                                    changes_params.push(param.to_string());
+                                }
                             }
                         } else {
-                            if self.invite_exceptions.lock().await.remove(param) {
-                                changes.push('I');
-                                changes_params.push(param.to_string());
-                            }
+                            client
+                                .send_numeric_reply(
+                                    NumericReply::ErrChanOpPrivsNeeded,
+                                    format!("{} :You're not channel operator", self.name)
+                                        .to_string(),
+                                )
+                                .await;
                         }
                     } else {
                         for exception in &*self.invite_exceptions.lock().await {
@@ -582,6 +678,14 @@ impl Channel {
     pub async fn is_operator(&self, nick: &str) -> bool {
         if let Some(modes) = self.participants.read().await.get(nick) {
             return modes.is_operator(false);
+        }
+
+        false
+    }
+
+    pub async fn is_half_operator(&self, nick: &str) -> bool {
+        if let Some(modes) = self.participants.read().await.get(nick) {
+            return modes.is_half_operator(false);
         }
 
         false
