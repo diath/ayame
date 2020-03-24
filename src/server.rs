@@ -35,7 +35,8 @@ pub struct Server {
     address: SocketAddr,
     clients: Mutex<HashMap<String, Arc<Client>>>,
     clients_pending: Mutex<Vec<Arc<Client>>>,
-    operators: Mutex<HashMap<String, String>>,
+    operator_credentials: Mutex<HashMap<String, String>>,
+    operators: Mutex<HashSet<String>>,
     channels: Mutex<HashMap<String, Channel>>,
     motd: Mutex<Option<Vec<String>>>,
     nick_history: Mutex<HashMap<String, Vec<NickHistory>>>,
@@ -71,7 +72,8 @@ impl Server {
             address: format!("{}:{}", host, port).parse().unwrap(),
             clients: Mutex::new(HashMap::new()),
             clients_pending: Mutex::new(vec![]),
-            operators: Mutex::new(operators),
+            operator_credentials: Mutex::new(operators),
+            operators: Mutex::new(HashSet::new()),
             channels: Mutex::new(HashMap::new()),
             motd: Mutex::new(Server::load_motd(&motd_path)),
             nick_history: Mutex::new(HashMap::new()),
@@ -184,12 +186,20 @@ impl Server {
         }
     }
 
-    pub async fn is_operator(&self, name: &str, password: &str) -> bool {
-        if let Some(entry) = self.operators.lock().await.get(name) {
-            entry == password
-        } else {
-            false
+    pub async fn add_operator(&self, nick: String) {
+        self.operators.lock().await.insert(nick);
+    }
+
+    pub async fn remove_operator(&self, nick: &str) {
+        self.operators.lock().await.remove(nick);
+    }
+
+    pub async fn verify_operator(&self, name: &str, password: &str) -> bool {
+        if let Some(entry) = self.operator_credentials.lock().await.get(name) {
+            return entry == password;
         }
+
+        false
     }
 
     pub async fn forward_message(
