@@ -127,6 +127,7 @@ impl Client {
 
         let nick = self.nick.lock().await.to_string();
         if nick.len() != 0 {
+            self.server.remove_operator(&nick).await;
             self.server.unmap_nick(nick).await;
         }
 
@@ -260,6 +261,10 @@ impl Client {
                 'o' | 'O' => {
                     if !flag {
                         (*self.operator.lock().await) = false;
+
+                        let nick = self.nick.lock().await.to_string();
+                        self.server.remove_operator(&nick).await;
+
                         changes.push(ch);
                     }
                 }
@@ -556,8 +561,12 @@ impl Client {
         } else {
             let name = message.params[0].clone();
             let password = message.params[1].clone();
-            if self.server.is_operator(&name, &password).await {
+            if self.server.verify_operator(&name, &password).await {
                 (*self.operator.lock().await) = true;
+
+                let nick = self.nick.lock().await.to_string();
+                self.server.add_operator(nick).await;
+
                 self.send_numeric_reply(
                     NumericReply::RplYoureOper,
                     ":You are now an IRC operator".to_string(),
