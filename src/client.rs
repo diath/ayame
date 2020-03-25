@@ -210,8 +210,17 @@ impl Client {
         )
         .await;
 
-        self.server.send_motd(&self).await;
         /* TODO(diath): Send RPL_MYINFO with <servername> <version> <user modes> <server modes>. */
+        self.send_numeric_reply(
+            NumericReply::RplMyInfo,
+            format!(
+                "{} {}-{} {} {}",
+                self.server.name, IRCD_NAME, IRCD_VERSION, IRCD_USER_MODES, IRCD_CHANNEL_MODES
+            ),
+        )
+        .await;
+
+        self.server.send_motd(&self).await;
 
         self.update_idle_time().await;
 
