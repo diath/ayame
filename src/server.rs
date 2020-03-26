@@ -1115,6 +1115,21 @@ impl Server {
         }
     }
 
+    pub async fn broadcast_oper_notice(&self, message: String) {
+        for nick in &*self.operators.lock().await {
+            if let Some(client) = self.clients.lock().await.get(nick) {
+                client
+                    .send_raw(format!(
+                        ":{} NOTICE {} :{}",
+                        self.name,
+                        self.name,
+                        message.to_string(),
+                    ))
+                    .await;
+            }
+        }
+    }
+
     pub async fn handle_channel_mode(
         &self,
         client: &Client,

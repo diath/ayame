@@ -128,7 +128,15 @@ impl Client {
         let nick = self.nick.lock().await.to_string();
         if nick.len() != 0 {
             self.server.remove_operator(&nick).await;
-            self.server.unmap_nick(nick).await;
+            self.server.unmap_nick(nick.to_string()).await;
+
+            self.server
+                .broadcast_oper_notice(format!(
+                    "Client exiting: {} ({})",
+                    nick,
+                    self.address.ip().to_string()
+                ))
+                .await;
         }
 
         self.server.unmap_client(&self).await;
@@ -225,7 +233,18 @@ impl Client {
         self.update_idle_time().await;
 
         let nick = self.nick.lock().await.to_string();
-        self.server.append_nick_history(nick, self).await;
+        self.server
+            .append_nick_history(nick.to_string(), self)
+            .await;
+
+        /* TODO(diath): Display SSL/TLS status */
+        self.server
+            .broadcast_oper_notice(format!(
+                "Client connecting: {} ({})",
+                nick,
+                self.address.ip().to_string()
+            ))
+            .await;
     }
 
     pub async fn get_modes_description(&self) -> String {
