@@ -17,7 +17,7 @@ use chrono::prelude::DateTime;
 use chrono::Utc;
 
 use tokio::net::TcpListener;
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, RwLock};
 
 use log;
 
@@ -40,6 +40,10 @@ pub struct Server {
     channels: Mutex<HashMap<String, Channel>>,
     motd: Mutex<Option<Vec<String>>>,
     nick_history: Mutex<HashMap<String, Vec<NickHistory>>>,
+    pub sent_packets: RwLock<u64>,
+    pub recv_packets: RwLock<u64>,
+    pub sent_bytes: RwLock<u64>,
+    pub recv_bytes: RwLock<u64>,
 }
 
 impl Server {
@@ -77,6 +81,10 @@ impl Server {
             channels: Mutex::new(HashMap::new()),
             motd: Mutex::new(Server::load_motd(&motd_path)),
             nick_history: Mutex::new(HashMap::new()),
+            sent_packets: RwLock::new(0),
+            recv_packets: RwLock::new(0),
+            sent_bytes: RwLock::new(0),
+            recv_bytes: RwLock::new(0),
         }
     }
 

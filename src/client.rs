@@ -103,6 +103,9 @@ impl Client {
                         self.server.broadcast_quit(&self, "EOF").await;
                         break;
                     } else {
+                        (*self.server.recv_packets.write().await) += 1;
+                        (*self.server.recv_bytes.write().await) += line.len() as u64;
+
                         let result = self.parser.lock().await.parse(line.clone());
                         if result.is_none() {
                             log::debug!("Client parse error.");
@@ -172,7 +175,10 @@ impl Client {
                 .write_all(format!("{}\r\n", message).as_bytes())
                 .await
             {
-                Ok(_) => {}
+                Ok(_) => {
+                    (*self.server.sent_packets.write().await) += 1;
+                    (*self.server.sent_bytes.write().await) += message.len() as u64;
+                }
                 Err(_) => {
                     log::debug!("Failed to write message ({})", message);
                 }
