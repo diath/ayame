@@ -6,6 +6,7 @@ pub enum NumericReply {
     RplEndOfStats = 219,
     RplUModeIs = 221,
     RplStatsUptime = 242,
+    RplStatsCustom = 249,
     RplAway = 301,
     RplUserHost = 302,
     RplIsOn = 303,
