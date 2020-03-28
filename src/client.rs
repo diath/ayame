@@ -1060,6 +1060,34 @@ impl Client {
                 )
                 .await;
             }
+            "T" => {
+                if *self.operator.lock().await {
+                    self.send_numeric_reply(
+                        NumericReply::RplStatsCustom,
+                        format!(
+                            "Received: {} packets ({} bytes)",
+                            *self.server.recv_packets.read().await,
+                            *self.server.recv_bytes.read().await
+                        ),
+                    )
+                    .await;
+                    self.send_numeric_reply(
+                        NumericReply::RplStatsCustom,
+                        format!(
+                            "Sent: {} packets ({} bytes)",
+                            *self.server.sent_packets.read().await,
+                            *self.server.sent_bytes.read().await
+                        ),
+                    )
+                    .await;
+                } else {
+                    self.send_numeric_reply(
+                        NumericReply::ErrNoPrivileges,
+                        ":Permission Denied- You're not an IRC operator".to_string(),
+                    )
+                    .await;
+                }
+            }
             _ => {}
         }
 
