@@ -3,6 +3,7 @@ use crate::channel::{Channel, ChannelUserModes};
 use crate::client::Client;
 use crate::config::Config;
 use crate::replies::NumericReply;
+use crate::service::Service;
 
 use std::cmp;
 use std::collections::{HashMap, HashSet};
@@ -32,6 +33,10 @@ pub struct NickHistory {
 pub struct Server {
     pub name: String,
     pub created: DateTime<Utc>,
+    pub sent_packets: RwLock<u64>,
+    pub recv_packets: RwLock<u64>,
+    pub sent_bytes: RwLock<u64>,
+    pub recv_bytes: RwLock<u64>,
     address: SocketAddr,
     clients: Mutex<HashMap<String, Arc<Client>>>,
     clients_pending: Mutex<Vec<Arc<Client>>>,
@@ -40,10 +45,7 @@ pub struct Server {
     channels: Mutex<HashMap<String, Channel>>,
     motd: Mutex<Option<Vec<String>>>,
     nick_history: Mutex<HashMap<String, Vec<NickHistory>>>,
-    pub sent_packets: RwLock<u64>,
-    pub recv_packets: RwLock<u64>,
-    pub sent_bytes: RwLock<u64>,
-    pub recv_bytes: RwLock<u64>,
+    services: Mutex<HashMap<String, Box<dyn Service + Send>>>,
 }
 
 impl Server {
@@ -73,6 +75,10 @@ impl Server {
         Server {
             name: name,
             created: DateTime::<Utc>::from(SystemTime::now()),
+            sent_packets: RwLock::new(0),
+            recv_packets: RwLock::new(0),
+            sent_bytes: RwLock::new(0),
+            recv_bytes: RwLock::new(0),
             address: format!("{}:{}", host, port).parse().unwrap(),
             clients: Mutex::new(HashMap::new()),
             clients_pending: Mutex::new(vec![]),
@@ -81,10 +87,7 @@ impl Server {
             channels: Mutex::new(HashMap::new()),
             motd: Mutex::new(Server::load_motd(&motd_path)),
             nick_history: Mutex::new(HashMap::new()),
-            sent_packets: RwLock::new(0),
-            recv_packets: RwLock::new(0),
-            sent_bytes: RwLock::new(0),
-            recv_bytes: RwLock::new(0),
+            services: Mutex::new(HashMap::new()),
         }
     }
 
