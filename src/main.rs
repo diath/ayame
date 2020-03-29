@@ -6,6 +6,7 @@ mod config;
 mod mask;
 mod replies;
 mod server;
+mod service;
 
 use chrono;
 use std::io::Write;
