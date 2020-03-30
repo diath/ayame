@@ -989,17 +989,9 @@ impl Client {
                     .await;
                 }
                 _ => {
-                    if self.server.is_nick_mapped(target).await {
-                        self.server
-                            .forward_message(is_notice, self, target, text.clone())
-                            .await;
-                    } else {
-                        self.send_numeric_reply(
-                            NumericReply::ErrNoSuchNick,
-                            format!("{} :No such nick/channel", target).to_string(),
-                        )
+                    self.server
+                        .forward_message(is_notice, self, target, text.clone())
                         .await;
-                    }
                 }
             }
         }

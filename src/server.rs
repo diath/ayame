@@ -4,6 +4,7 @@ use crate::client::Client;
 use crate::config::Config;
 use crate::replies::NumericReply;
 use crate::service::Service;
+use crate::services::nickserv::NickServ;
 
 use std::cmp;
 use std::collections::{HashMap, HashSet};
@@ -45,7 +46,7 @@ pub struct Server {
     channels: Mutex<HashMap<String, Channel>>,
     motd: Mutex<Option<Vec<String>>>,
     nick_history: Mutex<HashMap<String, Vec<NickHistory>>>,
-    services: Mutex<HashMap<String, Box<dyn Service + Send>>>,
+    services: Mutex<HashMap<String, Box<dyn Service + Send + Sync>>>,
 }
 
 impl Server {
@@ -72,6 +73,14 @@ impl Server {
         }
         log::info!("Loaded {} operators.", operators.len());
 
+        let mut services: HashMap<String, Box<dyn Service + Send + Sync>> = HashMap::new();
+        services.insert(
+            "nickserv".to_string(),
+            Box::new(NickServ {
+                nicks: Mutex::new(HashMap::new()),
+            }),
+        );
+
         Server {
             name: name,
             created: DateTime::<Utc>::from(SystemTime::now()),
@@ -87,7 +96,7 @@ impl Server {
             channels: Mutex::new(HashMap::new()),
             motd: Mutex::new(Server::load_motd(&motd_path)),
             nick_history: Mutex::new(HashMap::new()),
-            services: Mutex::new(HashMap::new()),
+            services: Mutex::new(services),
         }
     }
 
@@ -220,11 +229,11 @@ impl Server {
         name: &str,
         message: String,
     ) {
-        if !self.clients.lock().await.contains_key(name) {
-            panic!("forward_message()");
-        }
-
-        if let Some(client) = self.clients.lock().await.get(name) {
+        if let Some(service) = self.services.lock().await.get(name) {
+            service
+                .on_message(sender, message.split(" ").collect::<Vec<&str>>())
+                .await;
+        } else if let Some(client) = self.clients.lock().await.get(name) {
             if is_notice {
                 log::debug!(
                     "[NOTICE {} -> {}] {}",
@@ -268,6 +277,13 @@ impl Server {
                         .await;
                 }
             }
+        } else {
+            sender
+                .send_numeric_reply(
+                    NumericReply::ErrNoSuchNick,
+                    format!("{} :No such nick/channel", name).to_string(),
+                )
+                .await;
         }
     }
 
