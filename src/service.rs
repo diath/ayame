@@ -1,5 +1,8 @@
-use ircmsgprs::parser::Message;
+use async_trait::async_trait;
 
+use crate::client::Client;
+
+#[async_trait]
 pub trait Service {
-    fn on_message(&self, message: Message);
+    async fn on_message(&self, client: &Client, params: Vec<&str>);
 }
