@@ -12,6 +12,7 @@ pub enum NumericReply {
     RplIsOn = 303,
     RplUnAway = 305,
     RplNowAway = 306,
+    RplUserIsRegNick = 307,
     RplWhoisUser = 311,
     RplWhoisServer = 312,
     RplWhoisOperator = 313,

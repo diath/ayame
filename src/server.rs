@@ -74,12 +74,7 @@ impl Server {
         log::info!("Loaded {} operators.", operators.len());
 
         let mut services: HashMap<String, Box<dyn Service + Send + Sync>> = HashMap::new();
-        services.insert(
-            "nickserv".to_string(),
-            Box::new(NickServ {
-                nicks: Mutex::new(HashMap::new()),
-            }),
-        );
+        services.insert("nickserv".to_string(), Box::new(NickServ::new()));
 
         Server {
             name: name,
@@ -984,6 +979,15 @@ impl Server {
                     format!("{} {} {} * :{}", nick, user, host, real_name),
                 )
                 .await;
+
+            if *target.identified.lock().await {
+                client
+                    .send_numeric_reply(
+                        NumericReply::RplUserIsRegNick,
+                        format!("{} :is identified for this nick", nick),
+                    )
+                    .await;
+            }
 
             client
                 .send_numeric_reply(
