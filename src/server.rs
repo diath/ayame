@@ -4,6 +4,7 @@ use crate::client::Client;
 use crate::config::Config;
 use crate::replies::NumericReply;
 use crate::service::Service;
+use crate::services::hostserv::HostServ;
 use crate::services::nickserv::NickServ;
 
 use std::cmp;
@@ -75,6 +76,7 @@ impl Server {
 
         let mut services: HashMap<String, Box<dyn Service + Send + Sync>> = HashMap::new();
         services.insert("nickserv".to_string(), Box::new(NickServ::new()));
+        services.insert("hostserv".to_string(), Box::new(HostServ::new()));
 
         Server {
             name: name,
